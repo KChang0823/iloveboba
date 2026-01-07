@@ -787,6 +787,20 @@
       }
     };
 
+    // --- Cloudinary URL Transformation Helper ---
+    const transformCloudinaryUrl = (url) => {
+      if (!url || typeof url !== 'string') return url;
+      try {
+        if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+          return url.replace('/upload/', '/upload/c_fill,ar_1:1,g_auto,w_800/');
+        }
+        return url;
+      } catch (e) {
+        console.error('transformCloudinaryUrl error:', e);
+        return url;
+      }
+    };
+
     // --- NEW: Reusable Polaroid Component ---
     const PolaroidCard = ({ imageSrc, date, rotation = 'rotate-0', className = '', washiTapeColor = 'bg-yellow-400',
       isShaking = false, showStamp = false }) => {
@@ -794,7 +808,7 @@
         <div className={`relative bg-white p-3 pb-12 shadow-2xl rounded-sm transform transition-all duration-300
         ${rotation} hover:rotate-0 hover:scale-105 hover:z-50 ${isShaking ? 'animate-shake' : ''} ${className}`}>
           {/* Washi Tape */}
-          <div className={`absolute -top-3 left-1/2 -translate-x-1/2 w-24 h-6 ${washiTapeColor} shadow-sm z-20`} style={{
+          <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-[35%] h-4 ${washiTapeColor} shadow-sm z-20`} style={{
             transform: 'translateX(-50%) rotate(-2deg)', clipPath: 'polygon(2% 0%, 98% 2%, 100% 100%, 0% 98%)',
             maskImage: 'repeating-linear-gradient(-45deg,transparent,transparent 2px,black 3px,black 6px)'
           }}></div>
@@ -846,105 +860,107 @@
       };
 
       return (
-        <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-          <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-[1000]">
-            <Icons.X size={32} />
-          </button>
+        <div className="fixed inset-0 z-[999] bg-black/90 overflow-y-auto backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+          <div className="min-h-screen w-full flex items-center justify-center p-4 py-12">
+            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="fixed top-4 right-4 text-white/50 hover:text-white transition-colors z-[1000]">
+              <Icons.X size={32} />
+            </button>
 
-          {/* 3D Container */}
-          <div className="group w-full max-w-md aspect-[3/4] perspective-1000 cursor-pointer" onClick={handleFlip}>
-            <div className={`relative w-full h-full transition-all duration-700 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+            {/* 3D Container - Dynamic Height */}
+            <div className="group w-full max-w-md perspective-1000 cursor-pointer" onClick={handleFlip}>
+              <div className={`relative w-full transition-transform duration-700 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
 
-              {/* FRONT: Photo */}
-              <div className="absolute inset-0 backface-hidden bg-white p-4 pb-16 shadow-2xl rounded-sm flex flex-col items-center justify-center">
-                {/* Tape */}
-                <div className={`absolute -top-3 left-1/2 -translate-x-1/2 w-32 h-8 ${photo.tapeColor || 'bg-amber-200'} shadow-sm z-20`} style={{
-                  transform: 'translateX(-50%) rotate(-2deg)',
-                  clipPath: 'polygon(2% 0%, 98% 2%, 100% 100%, 0% 98%)',
-                  maskImage: 'repeating-linear-gradient(-45deg,transparent,transparent 2px,black 3px,black 6px)'
-                }}></div>
+                {/* FRONT: Photo (Relative when visible) */}
+                <div className={`${isFlipped ? 'absolute inset-0 opacity-0 pointer-events-none' : 'relative'} backface-hidden bg-white p-4 pb-16 shadow-2xl rounded-sm flex flex-col items-center justify-center transition-opacity duration-300`}>
+                  {/* Tape */}
+                  <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-[35%] h-5 ${photo.tapeColor || 'bg-amber-200'} shadow-sm z-20`} style={{
+                    transform: 'translateX(-50%) rotate(-2deg)',
+                    clipPath: 'polygon(2% 0%, 98% 2%, 100% 100%, 0% 98%)',
+                    maskImage: 'repeating-linear-gradient(-45deg,transparent,transparent 2px,black 3px,black 6px)'
+                  }}></div>
 
-                <div className="w-full h-full bg-gray-100 overflow-hidden relative border border-black/5">
-                  <img src={photo.photoUrl} className="w-full h-full object-cover" />
-                </div>
+                  <div className="w-full aspect-square bg-gray-100 overflow-hidden relative border border-black/5">
+                    <img src={transformCloudinaryUrl(photo.photoUrl)} className="w-full h-full object-cover" />
+                  </div>
 
-                <div className="absolute bottom-6 text-gray-400 font-mono text-xs flex items-center gap-2">
-                  ↻ Click to Flip
-                </div>
-              </div>
-
-              {/* BACK: Receiptify Style */}
-              <div className="absolute inset-0 backface-hidden rotate-y-180 flex flex-col items-center justify-center p-4">
-                {/* Paper Container - slightly larger than content to show texture */}
-                <div className="relative w-full h-full bg-[#f0f0f0] shadow-xl overflow-hidden receipt-mask flex flex-col">
-
-                  {/* Noise Overlay */}
-                  <div className="absolute inset-0 bg-noise opacity-60 pointer-events-none mix-blend-multiply z-0"></div>
-
-                  {/* Content */}
-                  <div className="relative z-10 p-6 flex-1 flex flex-col font-receipt text-[#2d2d2d] uppercase tracking-tighter leading-none">
-
-                    {/* Header */}
-                    <div className="text-center border-b-2 border-dashed border-[#2d2d2d]/30 pb-4 mb-4">
-                      <div className="text-3xl font-bold tracking-widest mb-1">ILOVEBOBA</div>
-                      <div className="text-sm">ALL TIME</div>
-                    </div>
-
-                    {/* Meta */}
-                    <div className="flex justify-between text-sm mb-4">
-                      <span>ORD #{photo.timestamp.toString().slice(-4)}</span>
-                      <span>FOR {photo.user}</span>
-                    </div>
-                    <div className="text-sm mb-4 text-center">
-                      {photo.date || new Date(photo.timestamp).toLocaleDateString()}
-                    </div>
-
-                    {/* Table Header */}
-                    <div className="flex text-sm border-b-2 border-dashed border-[#2d2d2d]/30 pb-2 mb-2">
-                      <span className="w-12">QTY</span>
-                      <span className="flex-1">ITEM</span>
-                      <span className="w-12 text-right">AMT</span>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto scrollbar-hide space-y-2">
-                      <div className="flex text-sm">
-                        <span className="w-12">01</span>
-                        <span className="flex-1 text-lg font-bold">{photo.shopName}</span>
-                        <span className="w-12 text-right">{photo.price}</span>
-                      </div>
-                      <div className="flex text-sm pl-12 opacity-70">
-                        <span className="flex-1">&gt; 30% SUGAR</span>
-                        <span className="w-12 text-right">0</span>
-                      </div>
-                      <div className="flex text-sm pl-12 opacity-70">
-                        <span className="flex-1">&gt; NO ICE</span>
-                        <span className="w-12 text-right">0</span>
-                      </div>
-                      <div className="flex text-sm mt-2">
-                        <span className="w-12">04</span>
-                        <span className="flex-1 text-lg font-bold">[{photo.title}]</span>
-                        <span className="w-12 text-right">1</span>
-                      </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="border-t-2 border-dashed border-[#2d2d2d]/30 pt-4 mt-4 space-y-1">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>TOTAL</span>
-                        <span>${photo.price}</span>
-                      </div>
-                      <div className="text-xs pt-2 text-center">CARD #: **** **** **** 2026</div>
-                      <div className="text-xs text-center">AUTH: 1314520</div>
-                      <div className="text-center text-sm pt-2 font-bold">THANK YOU FOR VISITING!</div>
-                    </div>
-
-                    {/* Barcode */}
-                    <div className="h-10 w-full css-barcode mt-4 opacity-80"></div>
-
+                  <div className="absolute bottom-6 text-gray-400 font-mono text-xs flex items-center gap-2">
+                    ↻ Click to Flip
                   </div>
                 </div>
-              </div>
 
+                {/* BACK: Receiptify Style (Relative when visible) */}
+                <div className={`${isFlipped ? 'relative' : 'absolute inset-0 opacity-0 pointer-events-none'} backface-hidden rotate-y-180 flex flex-col items-center justify-center p-4 transition-opacity duration-300`}>
+                  {/* Paper Container */}
+                  <div className="relative w-full min-h-full bg-[#f0f0f0] shadow-xl receipt-mask flex flex-col">
+
+                    {/* Noise Overlay */}
+                    <div className="absolute inset-0 bg-noise opacity-60 pointer-events-none mix-blend-multiply z-0"></div>
+
+                    {/* Content */}
+                    <div className="relative z-10 p-6 flex-1 flex flex-col font-receipt text-[#2d2d2d] uppercase tracking-tighter leading-none">
+
+                      {/* Header */}
+                      <div className="text-center border-b-2 border-dashed border-[#2d2d2d]/30 pb-4 mb-4">
+                        <div className="text-3xl font-bold tracking-widest mb-1">ILOVEBOBA</div>
+                        <div className="text-sm">ALL TIME</div>
+                      </div>
+
+                      {/* Meta */}
+                      <div className="flex justify-between text-sm mb-4">
+                        <span>ORD #{photo.timestamp.toString().slice(-4)}</span>
+                        <span>FOR {photo.user}</span>
+                      </div>
+                      <div className="text-sm mb-4 text-center">
+                        {photo.date || new Date(photo.timestamp).toLocaleDateString()}
+                      </div>
+
+                      {/* Table Header */}
+                      <div className="flex text-sm border-b-2 border-dashed border-[#2d2d2d]/30 pb-2 mb-2">
+                        <span className="w-12">QTY</span>
+                        <span className="flex-1">ITEM</span>
+                        <span className="w-12 text-right">AMT</span>
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <div className="flex text-sm">
+                          <span className="w-12">01</span>
+                          <span className="flex-1 text-lg font-bold">{photo.shopName}</span>
+                          <span className="w-12 text-right">{photo.price}</span>
+                        </div>
+                        <div className="flex text-sm pl-12 opacity-70">
+                          <span className="flex-1">&gt; 30% SUGAR</span>
+                          <span className="w-12 text-right">0</span>
+                        </div>
+                        <div className="flex text-sm pl-12 opacity-70">
+                          <span className="flex-1">&gt; NO ICE</span>
+                          <span className="w-12 text-right">0</span>
+                        </div>
+                        <div className="flex text-sm mt-2">
+                          <span className="w-12">04</span>
+                          <span className="flex-1 text-lg font-bold">[{photo.title}]</span>
+                          <span className="w-12 text-right">1</span>
+                        </div>
+                      </div>
+
+                      {/* Footer */}
+                      <div className="border-t-2 border-dashed border-[#2d2d2d]/30 pt-4 mt-4 space-y-1">
+                        <div className="flex justify-between text-lg font-bold">
+                          <span>TOTAL</span>
+                          <span>${photo.price}</span>
+                        </div>
+                        <div className="text-xs pt-2 text-center">CARD #: **** **** **** 2026</div>
+                        <div className="text-xs text-center">AUTH: 1314520</div>
+                        <div className="text-center text-sm pt-2 font-bold">THANK YOU FOR VISITING!</div>
+                      </div>
+
+                      {/* Barcode */}
+                      <div className="h-10 w-full css-barcode mt-4 opacity-80"></div>
+
+                    </div>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
         </div>
@@ -1808,11 +1824,14 @@
                         // Find latest photo for thumbnail
                         // DEBUG: Check data availability
                         // console.log('All Users Memories:', memoryPhotos);
+                        const itemTimestamps = ach.items.map(item => String(item.timestamp));
                         const relevantMemories = memoryPhotos.filter(m => {
                           // Loose comparison for user to handle potential whitespace trimming differences
                           const userMatch = (m.user || '').trim() === user;
                           const titleMatch = m.title === ach.title;
-                          return userMatch && titleMatch;
+                          // Ensure the linked drink still exists (use String for type-safe comparison)
+                          const drinkExists = itemTimestamps.includes(String(m.sourceDrinkId));
+                          return userMatch && titleMatch && drinkExists;
                         });
                         console.log(`Checking ${user} - ${ach.title}: Found ${relevantMemories.length} memories`, relevantMemories);
 
@@ -1824,11 +1843,11 @@
                         return (
                           <div key={ach.id} className="relative group flex justify-center py-2 h-full">
                             {/* NEW: Conditional Rendering Logic */}
-                            {latestMemory ? (
+                            {latestMemory && latestMemory.photoUrl && latestItem ? (
                               /* BRANCH A: HAS PHOTO -> PolaroidCard (brings its own tape) */
                               <div onClick={() => openHistory(ach, user)} className="w-full flex justify-center cursor-pointer">
                                 <PolaroidCard
-                                  imageSrc={latestMemory.photoUrl}
+                                  imageSrc={transformCloudinaryUrl(latestMemory.photoUrl)}
                                   date={latestItem.date}
                                   rotation={`rotate-[${rotation}deg]`}
                                   washiTapeColor={tapeColor}
@@ -2099,6 +2118,8 @@
                         sourceDrinkId: sourceDrinkId // New Foreign Key
                       })
                     });
+                    // Refresh data to show the new photo immediately
+                    await fetchData();
                     // After save, close modal (the modal itself handles the timeout delay for UX)
                   }}
                 />
@@ -2172,14 +2193,14 @@
                         </div>
                       ) : (
                         /* GRID CONTAINER */
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-max">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-max pt-6">
                           {selectedAchievement.items.slice().reverse().map((item, i) => {
-                            // Find linked photo
-                            const linkedPhoto = memoryPhotos.find(p => p.sourceDrinkId === item.timestamp && p.user === selectedAchievement.user);
+                            // Find linked photo (use String for type-safe comparison)
+                            const linkedPhoto = memoryPhotos.find(p => String(p.sourceDrinkId) === String(item.timestamp) && p.user === selectedAchievement.user);
                             const seed = item.timestamp % 100;
                             const rotation = (seed % 6) - 3;
 
-                            if (linkedPhoto) {
+                            if (linkedPhoto && linkedPhoto.photoUrl) {
                               /* TYPE A: MINI POLAROID (Has Photo) */
                               return (
                                 <div key={i}
@@ -2191,12 +2212,12 @@
                                   style={{ transform: `rotate(${rotation}deg)` }}
                                 >
                                   {/* Tape */}
-                                  <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-3 ${selectedAchievement.tapeColor || 'bg-amber-200'} opacity-90 shadow-sm z-20`}
+                                  <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-[35%] h-2.5 ${selectedAchievement.tapeColor || 'bg-amber-200'} opacity-90 shadow-sm z-20`}
                                     style={{ transform: 'translateX(-50%) rotate(-2deg)' }}></div>
 
                                   {/* Photo */}
                                   <div className="w-full aspect-square bg-gray-100 overflow-hidden mb-2">
-                                    <img src={linkedPhoto.photoUrl} className="w-full h-full object-cover" loading="lazy" />
+                                    <img src={transformCloudinaryUrl(linkedPhoto.photoUrl)} className="w-full h-full object-cover" loading="lazy" />
                                   </div>
 
                                   {/* Date Caption */}
