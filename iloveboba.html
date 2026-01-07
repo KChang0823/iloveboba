@@ -31,6 +31,15 @@
       scrollbar-width: none;
     }
 
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
     /* Animations */
     @keyframes float {
 
@@ -132,6 +141,23 @@
 
     .animate-stamp-in {
       animation: stamp-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    /* --- Receipt Unroll Animation --- */
+    @keyframes receipt-unroll {
+      from {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .animate-receipt-unroll {
+      animation: receipt-unroll 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
 
     /* --- 3D Flip Utilities --- */
@@ -860,8 +886,8 @@
       };
 
       return (
-        <div className="fixed inset-0 z-[999] bg-black/90 overflow-y-auto backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-          <div className="min-h-screen w-full flex items-center justify-center p-4 py-12">
+        <div className="fixed inset-0 z-[999] bg-black/90 overflow-hidden backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+          <div className="h-screen w-full flex items-center justify-center p-4">
             <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="fixed top-4 right-4 text-white/50 hover:text-white transition-colors z-[1000]">
               <Icons.X size={32} />
             </button>
@@ -890,80 +916,96 @@
 
                 {/* BACK: Receiptify Style (Relative when visible) */}
                 <div className={`${isFlipped ? 'relative' : 'absolute inset-0 opacity-0 pointer-events-none'} backface-hidden rotate-y-180 flex flex-col items-center justify-center p-4 transition-opacity duration-300`}>
-                  {/* Paper Container */}
-                  <div className="relative w-full min-h-full bg-[#f0f0f0] shadow-xl receipt-mask flex flex-col">
 
-                    {/* Noise Overlay */}
-                    <div className="absolute inset-0 bg-noise opacity-60 pointer-events-none mix-blend-multiply z-0"></div>
+                  {/* Paper Viewport (Scrollable + Fade Mask) */}
+                  {/* Paper Viewport Wrapper (Fixed Gradients) */}
+                  <div className="relative w-full max-h-[85vh] flex flex-col">
 
-                    {/* Content */}
-                    <div className="relative z-10 p-6 flex-1 flex flex-col font-receipt text-[#2d2d2d] uppercase tracking-tighter leading-none">
+                    {/* Top Fade Zone */}
+                    <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/90 to-transparent pointer-events-none z-20"></div>
 
-                      {/* Header */}
-                      <div className="text-center border-b-2 border-dashed border-[#2d2d2d]/30 pb-4 mb-4">
-                        <div className="text-3xl font-bold tracking-widest mb-1">ILOVEBOBA</div>
-                        <div className="text-sm">ALL TIME</div>
-                      </div>
+                    {/* Bottom Fade Zone */}
+                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/90 to-transparent pointer-events-none z-20"></div>
 
-                      {/* Meta */}
-                      <div className="flex justify-between text-sm mb-4">
-                        <span>ORD #{photo.timestamp.toString().slice(-4)}</span>
-                        <span>FOR {photo.user}</span>
-                      </div>
-                      <div className="text-sm mb-4 text-center">
-                        {photo.date || new Date(photo.timestamp).toLocaleDateString()}
-                      </div>
+                    {/* Scrollable Container */}
+                    <div className="overflow-y-auto scrollbar-hide w-full flex-1 py-16">
+                      {/* The Physical Paper (Shadow, Sawtooth, Animation) */}
+                      <div className="relative w-full min-h-full bg-[#f0f0f0] shadow-xl receipt-mask flex flex-col animate-receipt-unroll">
 
-                      {/* Table Header */}
-                      <div className="flex text-sm border-b-2 border-dashed border-[#2d2d2d]/30 pb-2 mb-2">
-                        <span className="w-12">QTY</span>
-                        <span className="flex-1">ITEM</span>
-                        <span className="w-12 text-right">AMT</span>
-                      </div>
+                        {/* Noise Overlay */}
+                        <div className="absolute inset-0 bg-noise opacity-60 pointer-events-none mix-blend-multiply z-0"></div>
 
-                      <div className="flex-1 space-y-2">
-                        <div className="flex text-sm">
-                          <span className="w-12">01</span>
-                          <span className="flex-1 text-lg font-bold">{photo.shopName}</span>
-                          <span className="w-12 text-right">{photo.price}</span>
+                        {/* Content */}
+                        <div className="relative z-10 p-6 flex-1 flex flex-col font-receipt text-[#2d2d2d] uppercase tracking-tighter leading-none">
+
+                          {/* Header */}
+                          <div className="text-center border-b-2 border-dashed border-[#2d2d2d]/30 pb-4 mb-4">
+                            <div className="text-3xl font-bold tracking-widest mb-1">ILOVEBOBA</div>
+                            <div className="text-sm">ALL TIME</div>
+                          </div>
+
+                          {/* Meta */}
+                          <div className="flex justify-between text-sm mb-4">
+                            <span>ORD #{photo.timestamp.toString().slice(-4)}</span>
+                            <span>FOR {photo.user}</span>
+                          </div>
+                          <div className="text-sm mb-4 text-center">
+                            {photo.date || new Date(photo.timestamp).toLocaleDateString()}
+                          </div>
+
+                          {/* Table Header */}
+                          <div className="flex text-sm border-b-2 border-dashed border-[#2d2d2d]/30 pb-2 mb-2">
+                            <span className="w-12">QTY</span>
+                            <span className="flex-1">ITEM</span>
+                            <span className="w-12 text-right">AMT</span>
+                          </div>
+
+                          <div className="flex-1 space-y-2">
+                            <div className="flex text-sm">
+                              <span className="w-12">01</span>
+                              <span className="flex-1 text-lg font-bold">{photo.shopName}</span>
+                              <span className="w-12 text-right">{photo.price}</span>
+                            </div>
+                            <div className="flex text-sm pl-12 opacity-70">
+                              <span className="flex-1">&gt; 30% SUGAR</span>
+                              <span className="w-12 text-right">0</span>
+                            </div>
+                            <div className="flex text-sm pl-12 opacity-70">
+                              <span className="flex-1">&gt; NO ICE</span>
+                              <span className="w-12 text-right">0</span>
+                            </div>
+                            <div className="flex text-sm mt-2">
+                              <span className="w-12">04</span>
+                              <span className="flex-1 text-lg font-bold">[{photo.title}]</span>
+                              <span className="w-12 text-right">1</span>
+                            </div>
+                          </div>
+
+                          {/* Footer */}
+                          <div className="border-t-2 border-dashed border-[#2d2d2d]/30 pt-4 mt-4 space-y-1">
+                            <div className="flex justify-between text-lg font-bold">
+                              <span>TOTAL</span>
+                              <span>${photo.price}</span>
+                            </div>
+                            <div className="text-xs pt-2 text-center">CARD #: **** **** **** 2026</div>
+                            <div className="text-xs text-center">AUTH: 1314520</div>
+                            <div className="text-center text-sm pt-2 font-bold">THANK YOU FOR VISITING!</div>
+                          </div>
+
+                          {/* Barcode */}
+                          <div className="h-10 w-full css-barcode mt-4 opacity-80"></div>
+
                         </div>
-                        <div className="flex text-sm pl-12 opacity-70">
-                          <span className="flex-1">&gt; 30% SUGAR</span>
-                          <span className="w-12 text-right">0</span>
-                        </div>
-                        <div className="flex text-sm pl-12 opacity-70">
-                          <span className="flex-1">&gt; NO ICE</span>
-                          <span className="w-12 text-right">0</span>
-                        </div>
-                        <div className="flex text-sm mt-2">
-                          <span className="w-12">04</span>
-                          <span className="flex-1 text-lg font-bold">[{photo.title}]</span>
-                          <span className="w-12 text-right">1</span>
-                        </div>
                       </div>
-
-                      {/* Footer */}
-                      <div className="border-t-2 border-dashed border-[#2d2d2d]/30 pt-4 mt-4 space-y-1">
-                        <div className="flex justify-between text-lg font-bold">
-                          <span>TOTAL</span>
-                          <span>${photo.price}</span>
-                        </div>
-                        <div className="text-xs pt-2 text-center">CARD #: **** **** **** 2026</div>
-                        <div className="text-xs text-center">AUTH: 1314520</div>
-                        <div className="text-center text-sm pt-2 font-bold">THANK YOU FOR VISITING!</div>
-                      </div>
-
-                      {/* Barcode */}
-                      <div className="h-10 w-full css-barcode mt-4 opacity-80"></div>
-
                     </div>
                   </div>
                 </div>
-
               </div>
+
             </div>
           </div>
         </div>
+
       );
     };
 
