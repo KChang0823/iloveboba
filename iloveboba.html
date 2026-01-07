@@ -630,7 +630,7 @@
     // --- 成就系統邏輯 (Same) ---
     const ACHIEVEMENTS = [
       {
-        id: 'rich', title: '土豪金', desc: '找出所有價格超過 100 元的飲料',
+        id: 'rich', title: '土豪金', receiptLogic: 'SNAPSHOT', desc: '找出所有價格超過 100 元的飲料',
         riddle: '一張紅色鈔票無法滿足的渴望...當那杯飲品的價值突破三位數，金色的光芒將會降臨。',
         tapeColor: 'bg-yellow-400/30', color: '#FFD700', // 閃亮金
         icon:
@@ -641,7 +641,7 @@
         }
       },
       {
-        id: 'loyal', title: '專情的人', desc: '連續 5 次喝同一店家同一品項',
+        id: 'loyal', title: '專情的人', receiptLogic: 'HISTORY', desc: '連續 5 次喝同一店家同一品項',
         riddle: '世間萬物都在變，唯有你的口味恆久不變。連續五次，別讓任何新歡打斷這份舊愛。',
         tapeColor: 'bg-purple-400/30', color: '#FF69B4', // 熱情粉
         icon:
@@ -663,7 +663,7 @@
                   itemName: currentStreak[0].itemName,
                   count: currentStreak.length,
                   date: currentStreak[currentStreak.length - 1].date,
-                  drinks: [...currentStreak]
+                  sourceRecords: [...currentStreak]
                 });
               }
               currentStreak = [curr];
@@ -676,7 +676,7 @@
               itemName: currentStreak[0].itemName,
               count: currentStreak.length,
               date: currentStreak[currentStreak.length - 1].date,
-              drinks: [...currentStreak]
+              sourceRecords: [...currentStreak]
             });
           }
 
@@ -684,7 +684,7 @@
         }
       },
       {
-        id: 'explorer', title: '嘗百草', desc: '單月內喝了超過 10 家不同的店',
+        id: 'explorer', title: '嘗百草', receiptLogic: 'HISTORY', desc: '單月內喝了超過 10 家不同的店',
         riddle: '神農氏的靈魂附身於此。在短短三十個日升日落之間，你的足跡必須踏遍十塊不同的領地。',
         tapeColor: 'bg-green-400/30', color: '#4CAF50', // 自然綠
         icon:
@@ -696,30 +696,33 @@
             if (!dStr) return;
             const [y, m] = dStr.split('-');
             const monthKey = `${y}-${m}`;
-            if (!monthMap[monthKey]) monthMap[monthKey] = new Set();
-            monthMap[monthKey].add(d.shopName);
+            if (!monthMap[monthKey]) monthMap[monthKey] = new Map();
+            if (!monthMap[monthKey].has(d.shopName)) {
+              monthMap[monthKey].set(d.shopName, d);
+            }
           });
 
           const unlockedMonths = [];
-          Object.entries(monthMap).forEach(([month, shopSet]) => {
-            if (shopSet.size >= 10) {
+          Object.entries(monthMap).forEach(([month, shopMap]) => {
+            if (shopMap.size >= 10) {
               unlockedMonths.push({
                 id: `explorer-${month}`,
                 date: month,
-                count: shopSet.size,
-                shopName: `解鎖 ${shopSet.size} 家店`,
-                itemName: '成就達成！'
+                count: shopMap.size,
+                shopName: `解鎖 ${shopMap.size} 家店`,
+                itemName: '成就達成！',
+                sourceRecords: Array.from(shopMap.values())
               });
             }
           });
 
-          const maxShops = Object.values(monthMap).reduce((max, set) => Math.max(max, set.size), 0);
+          const maxShops = Object.values(monthMap).reduce((max, map) => Math.max(max, map.size), 0);
 
           return { items: unlockedMonths, progress: maxShops, target: 10 };
         }
       },
       {
-        id: 'copycat', title: '心有靈犀', desc: '同一天雙方喝了一模一樣的飲料',
+        id: 'copycat', title: '心有靈犀', receiptLogic: 'DUO', desc: '同一天雙方喝了一模一樣的飲料',
         riddle: '原本是兩個獨立的靈魂，卻在某一刻做出了完全鏡像的選擇。店名、品項、甜度、冰塊，缺一不可的共鳴。',
         tapeColor: 'bg-rose-400/30', color: '#F43F5E', // 靈魂藍 -> Rose
         icon:
@@ -742,7 +745,8 @@
                 matches.push({
                   ...myD,
                   id: `match-${myD.id}`,
-                  extraNote: `與 ${matchedPartnerDrink.user} 喝一樣！`
+                  extraNote: `與 ${matchedPartnerDrink.user} 喝一樣！`,
+                  partnerDrink: matchedPartnerDrink
                 });
               }
             });
@@ -751,7 +755,7 @@
         }
       },
       {
-        id: 'solo', title: '獨吞大師', desc: '累積 15 天只有自己喝，對方沒喝',
+        id: 'solo', title: '獨吞大師', receiptLogic: 'HISTORY', desc: '累積 15 天只有自己喝，對方沒喝',
         riddle: '寂寞是美食家的特權，或者...只是你忘了揪？當只有你一人獨享的時光累積成塔，孤獨的王者將加冕。',
         tapeColor: 'bg-gray-400/30', color: '#9C27B0', // 神祕紫
         icon:
@@ -760,6 +764,7 @@
           let soloCount = 0;
           const unlockedBatches = [];
           const sortedDates = Object.keys(allRecords).sort();
+          let currentBatchDrinks = [];
 
           sortedDates.forEach(date => {
             const dayDrinks = allRecords[date];
@@ -767,6 +772,9 @@
             const hasOther = dayDrinks.some(d => (d.user || '').trim() !== currentUser);
 
             if (hasMe && !hasOther) {
+              const myDrinksToday = dayDrinks.filter(d => (d.user || '').trim() === currentUser);
+              currentBatchDrinks.push(...myDrinksToday);
+
               soloCount++;
               if (soloCount > 0 && soloCount % 15 === 0) {
                 unlockedBatches.push({
@@ -774,8 +782,10 @@
                   date: date,
                   shopName: `獨吞 ${soloCount} 天`,
                   itemName: '累積達成',
-                  price: 0
+                  price: 0,
+                  sourceRecords: [...currentBatchDrinks]
                 });
+                currentBatchDrinks = [];
               }
             }
           });
@@ -874,9 +884,27 @@
       );
     };
 
+    // --- Helper: Generate Receipt Items ---
+    const getReceiptItems = (config, data) => {
+      const logic = config.receiptLogic;
+
+      switch (logic) {
+        case 'SNAPSHOT':
+          return [data];
+        case 'DUO':
+          const duoItems = [data];
+          if (data.partnerDrink) duoItems.push(data.partnerDrink);
+          return duoItems;
+        case 'HISTORY':
+          return data.sourceRecords || [];
+        default:
+          return [data];
+      }
+    };
+
     // --- NEW: Lightbox Component with 3D Flip ---
     const MemoryLightbox = ({ photo, onClose }) => {
-      const [isFlipped, setIsFlipped] = useState(false);
+      const [isFlipped, setIsFlipped] = useState(!photo?.photoUrl);
 
       if (!photo) return null;
 
@@ -946,11 +974,11 @@
 
                           {/* Meta */}
                           <div className="flex justify-between text-sm mb-4">
-                            <span>ORD #{photo.timestamp.toString().slice(-4)}</span>
-                            <span>FOR {photo.user}</span>
+                            <span>ORD #{(photo.timestamp || Date.now()).toString().slice(-4)}</span>
+                            <span>FOR {photo.user || 'GUEST'}</span>
                           </div>
                           <div className="text-sm mb-4 text-center">
-                            {photo.date || new Date(photo.timestamp).toLocaleDateString()}
+                            {photo.date || (photo.timestamp ? new Date(photo.timestamp).toLocaleDateString() : new Date().toLocaleDateString())}
                           </div>
 
                           {/* Table Header */}
@@ -960,36 +988,46 @@
                             <span className="w-12 text-right">AMT</span>
                           </div>
 
-                          <div className="flex-1 space-y-2">
-                            <div className="flex text-sm">
-                              <span className="w-12">01</span>
-                              <span className="flex-1 text-lg font-bold">{photo.shopName}</span>
-                              <span className="w-12 text-right">{photo.price}</span>
-                            </div>
-                            <div className="flex text-sm pl-12 opacity-70">
-                              <span className="flex-1">&gt; 30% SUGAR</span>
-                              <span className="w-12 text-right">0</span>
-                            </div>
-                            <div className="flex text-sm pl-12 opacity-70">
-                              <span className="flex-1">&gt; NO ICE</span>
-                              <span className="w-12 text-right">0</span>
-                            </div>
-                            <div className="flex text-sm mt-2">
-                              <span className="w-12">04</span>
-                              <span className="flex-1 text-lg font-bold">[{photo.title}]</span>
-                              <span className="w-12 text-right">1</span>
-                            </div>
-                          </div>
+                          <div className="flex-1 space-y-2 min-h-[200px]">
+                            {(() => {
+                              const config = ACHIEVEMENTS.find(a => a.id === photo.id) || {};
+                              const items = getReceiptItems(config, photo);
+                              const totalPrice = items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
 
-                          {/* Footer */}
-                          <div className="border-t-2 border-dashed border-[#2d2d2d]/30 pt-4 mt-4 space-y-1">
-                            <div className="flex justify-between text-lg font-bold">
-                              <span>TOTAL</span>
-                              <span>${photo.price}</span>
-                            </div>
-                            <div className="text-xs pt-2 text-center">CARD #: **** **** **** 2026</div>
-                            <div className="text-xs text-center">AUTH: 1314520</div>
-                            <div className="text-center text-sm pt-2 font-bold">THANK YOU FOR VISITING!</div>
+                              return (
+                                <>
+                                  {items.map((item, idx) => (
+                                    <div key={idx} className="flex flex-col text-sm border-b border-dashed border-[#2d2d2d]/10 pb-2">
+                                      <div className="flex justify-between items-baseline font-bold">
+                                        <span className="w-8">{String(idx + 1).padStart(2, '0')}</span>
+                                        <span className="flex-1 break-words">{item.shopName}</span>
+                                        <span className="w-12 text-right">{item.price != null ? item.price : '-'}</span>
+                                      </div>
+                                      <div className="flex flex-col pl-8 text-xs opacity-70">
+                                        <span className="break-words">&gt; {item.itemName}</span>
+                                        {(config.receiptLogic === 'HISTORY' && item.date) && (
+                                          <span className="scale-90 origin-left opacity-60 font-mono">{item.date}</span>
+                                        )}
+                                        {item.extraNote && (
+                                          <span className="italic opacity-80 break-words">&gt; {item.extraNote}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+
+                                  {/* Dynamic Footer */}
+                                  <div className="border-t-2 border-dashed border-[#2d2d2d]/30 pt-4 mt-4 space-y-1">
+                                    <div className="flex justify-between text-lg font-bold">
+                                      <span>TOTAL</span>
+                                      <span>${totalPrice}</span>
+                                    </div>
+                                    <div className="text-xs pt-2 text-center">CARD #: **** **** **** 2026</div>
+                                    <div className="text-xs text-center">AUTH: 1314520</div>
+                                    <div className="text-center text-sm pt-2 font-bold">THANK YOU FOR VISITING!</div>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
 
                           {/* Barcode */}
@@ -2174,7 +2212,7 @@
               <div
                 className="fixed inset-0 bg-[#5A3E2B]/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"
                 onClick={() => setSelectedAchievement(null)}>
-                <div className={`bg-[#FFFBF0] rounded-[2.5rem] shadow-2xl w-full max-w-md p-6 text-center relative
+                <div className={`bg-[#FFFBF0] rounded-[2.5rem] shadow-2xl w-full max-w-xl md:max-w-2xl p-6 text-center relative
                     border-4 border-white animate-in zoom-in duration-200 flex flex-col max-h-[85vh]`} onClick={e =>
                     e.stopPropagation()}>
                   <button onClick={() => setSelectedAchievement(null)} className="absolute top-4 right-4 text-[#A1887F]
@@ -2235,7 +2273,7 @@
                         </div>
                       ) : (
                         /* GRID CONTAINER */
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-max pt-6">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 auto-rows-max pt-6">
                           {selectedAchievement.items.slice().reverse().map((item, i) => {
                             // Find linked photo (use String for type-safe comparison)
                             const linkedPhoto = memoryPhotos.find(p => String(p.sourceDrinkId) === String(item.timestamp) && p.user === selectedAchievement.user);
@@ -2246,7 +2284,7 @@
                               /* TYPE A: MINI POLAROID (Has Photo) */
                               return (
                                 <div key={i}
-                                  onClick={() => setLightBoxPhoto({ ...linkedPhoto, ...item, tapeColor: selectedAchievement.tapeColor })}
+                                  onClick={() => setLightBoxPhoto({ ...linkedPhoto, ...item, id: selectedAchievement.id, tapeColor: selectedAchievement.tapeColor })}
                                   className={`
                                     relative bg-white p-2 pb-8 shadow-md rounded-sm cursor-pointer 
                                     transform transition-all duration-300 hover:scale-105 hover:z-10 hover:shadow-xl
@@ -2271,7 +2309,9 @@
                             } else {
                               /* TYPE B: RECEIPT STUB (No Photo) */
                               return (
-                                <div key={i} className="relative group bg-[#FAFAFA] text-[#5D4037] p-3 shadow-sm flex flex-col justify-between min-h-[140px] font-mono text-xs border-t-2 border-dashed border-gray-300/50">
+                                <div key={i}
+                                  onClick={() => setLightBoxPhoto({ ...item, id: selectedAchievement.id, tapeColor: selectedAchievement.tapeColor, photoUrl: null })}
+                                  className="relative group bg-[#FAFAFA] text-[#5D4037] p-4 shadow-sm flex flex-col justify-between min-h-[180px] font-mono text-xs border-t-2 border-dashed border-gray-300/50 cursor-pointer hover:shadow-md transition-shadow">
                                   {/* Zigzag decoration could be done with CSS background patterns or clip-path if desired, simplified here as dashed border */}
 
                                   <div className="flex flex-col gap-1 z-10">
