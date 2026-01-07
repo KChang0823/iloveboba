@@ -2,7 +2,7 @@
 
 **ILOVEBOBA** 是一個充滿儀式感的珍奶紀錄應用。它不只是紀錄你喝了什麼，更將每一杯手搖飲的回憶轉化為精美的「拍立得」與「消費收據」，讓數據變得溫暖且具備收藏價值。
 
-![Version](https://img.shields.io/badge/version-7.5-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
+![Version](https://img.shields.io/badge/version-7.6-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
 
 ## ✨ 精選特色
 
@@ -40,10 +40,15 @@
 
 ## 🚀 版本紀錄 (Latest)
 
-### v7.5 (Current)
-*   **✨ 視覺優化**: 收據捲動視窗改用 **Fixed Gradient Overlays**，解決了邊緣模糊與小白點的問題，讓文字在中央區域保持絕對清晰。
+### v7.6 (Current)
+*   **🎯 可擴展收據邏輯**: 實作 `receiptLogic` 系統 (SNAPSHOT/DUO/HISTORY)，根據成就類型動態生成不同收據內容。
+*   **🖱️ 收據存根可點擊**: 沒有照片的歷史紀錄也能開啟 Lightbox，自動翻轉顯示收據。
+*   **🖥️ 桌面版 UI 放大**: Modal 寬度增加至 `max-w-2xl`，收據存根高度提升為 180px。
+*   **🐛 修復**: 解決 Lightbox 在缺少 timestamp 時崩潰的問題。
+
+### v7.5
+*   **✨ 視覺優化**: 收據捲動視窗改用 **Fixed Gradient Overlays**，解決了邊緣模糊與小白點的問題。
 *   **↕️ 透明留白**: 收據頂端與底端加入留白，營造更好的閱讀呼吸感。
-*   **📜 物理捲動**: 鎖定背景捲動，確保在查看收據時獲得沉浸式體驗。
 
 ### v7.0 - v7.4
 *   引入 **Receiptify** 風格設計。
