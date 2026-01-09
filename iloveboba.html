@@ -630,24 +630,24 @@
     // --- 成就系統邏輯 (Same) ---
     const ACHIEVEMENTS = [
       {
-        id: 'rich', title: '土豪金', receiptLogic: 'SNAPSHOT', desc: '找出所有價格超過 100 元的飲料',
+        id: 'rich', title: '土豪金', receiptLogic: 'SNAPSHOT', desc: '找出所有價格超過 80 元的飲料',
         riddle: '一張紅色鈔票無法滿足的渴望...當那杯飲品的價值突破三位數，金色的光芒將會降臨。',
         tapeColor: 'bg-yellow-400/30', color: '#FFD700', // 閃亮金
         icon:
           <Icons.DollarSign className="text-yellow-600" size={20} />, bg: 'bg-[#FFF9C4]',
         check: (userDrinks) => {
-          const unlockedItems = userDrinks.filter(d => d.price > 100);
+          const unlockedItems = userDrinks.filter(d => d.price > 80);
           return { items: unlockedItems, progress: unlockedItems.length, target: 1 };
         }
       },
       {
-        id: 'loyal', title: '專情的人', receiptLogic: 'HISTORY', desc: '連續 5 次喝同一店家同一品項',
-        riddle: '世間萬物都在變，唯有你的口味恆久不變。連續五次，別讓任何新歡打斷這份舊愛。',
+        id: 'loyal', title: '專情的人', receiptLogic: 'HISTORY', desc: '連續 3 次喝同一店家同一品項',
+        riddle: '世間萬物都在變，唯有你的口味恆久不變。連續三次，別讓任何新歡打斷這份舊愛。',
         tapeColor: 'bg-purple-400/30', color: '#FF69B4', // 熱情粉
         icon:
           <Icons.Gem className="text-purple-500" size={20} />, bg: 'bg-[#E1BEE7]',
         check: (userDrinks) => {
-          if (userDrinks.length < 5) return { items: [], progress: 0, target: 1 }; const sorted = [...userDrinks].sort((a, b) =>
+          if (userDrinks.length < 3) return { items: [], progress: 0, target: 1 }; const sorted = [...userDrinks].sort((a, b) =>
             a.timestamp - b.timestamp);
           const streaks = [];
           let currentStreak = [sorted[0]];
@@ -656,7 +656,7 @@
             const prev = sorted[i - 1]; const curr = sorted[i]; if
               (prev.shopName === curr.shopName && prev.itemName === curr.itemName) { currentStreak.push(curr); } else {
               if
-                (currentStreak.length >= 5) {
+                (currentStreak.length >= 3) {
                 streaks.push({
                   id: `streak-${i}`,
                   shopName: currentStreak[0].shopName,
@@ -669,7 +669,7 @@
               currentStreak = [curr];
             }
           }
-          if (currentStreak.length >= 5) {
+          if (currentStreak.length >= 3) {
             streaks.push({
               id: `streak-last`,
               shopName: currentStreak[0].shopName,
@@ -684,8 +684,8 @@
         }
       },
       {
-        id: 'explorer', title: '嘗百草', receiptLogic: 'HISTORY', desc: '單月內喝了超過 10 家不同的店',
-        riddle: '神農氏的靈魂附身於此。在短短三十個日升日落之間，你的足跡必須踏遍十塊不同的領地。',
+        id: 'explorer', title: '嘗百草', receiptLogic: 'HISTORY', desc: '單月內喝了超過 5 家不同的店',
+        riddle: '神農氏的靈魂附身於此。在短短三十個日升日落之間，你的足跡必須踏遍五塊不同的領地。',
         tapeColor: 'bg-green-400/30', color: '#4CAF50', // 自然綠
         icon:
           <Icons.Store className="text-emerald-600" size={20} />, bg: 'bg-[#C8E6C9]',
@@ -704,7 +704,7 @@
 
           const unlockedMonths = [];
           Object.entries(monthMap).forEach(([month, shopMap]) => {
-            if (shopMap.size >= 10) {
+            if (shopMap.size >= 5) {
               unlockedMonths.push({
                 id: `explorer-${month}`,
                 date: month,
@@ -718,7 +718,7 @@
 
           const maxShops = Object.values(monthMap).reduce((max, map) => Math.max(max, map.size), 0);
 
-          return { items: unlockedMonths, progress: maxShops, target: 10 };
+          return { items: unlockedMonths, progress: maxShops, target: 5 };
         }
       },
       {
@@ -755,13 +755,13 @@
         }
       },
       {
-        id: 'solo', title: '獨吞大師', receiptLogic: 'HISTORY', desc: '累積 15 天只有自己喝，對方沒喝',
+        id: 'solo', title: '獨吞大師', receiptLogic: 'HISTORY', desc: '連續 5 天只有自己喝，對方沒喝',
         riddle: '寂寞是美食家的特權，或者...只是你忘了揪？當只有你一人獨享的時光累積成塔，孤獨的王者將加冕。',
         tapeColor: 'bg-gray-400/30', color: '#9C27B0', // 神祕紫
         icon:
           <Icons.Ghost className="text-slate-600" size={20} />, bg: 'bg-[#CFD8DC]',
         check: (userDrinks, allRecords, currentUser) => {
-          let soloCount = 0;
+          let consecutiveCount = 0;
           const unlockedBatches = [];
           const sortedDates = Object.keys(allRecords).sort();
           let currentBatchDrinks = [];
@@ -774,22 +774,27 @@
             if (hasMe && !hasOther) {
               const myDrinksToday = dayDrinks.filter(d => (d.user || '').trim() === currentUser);
               currentBatchDrinks.push(...myDrinksToday);
+              consecutiveCount++;
 
-              soloCount++;
-              if (soloCount > 0 && soloCount % 15 === 0) {
+              if (consecutiveCount >= 5) {
                 unlockedBatches.push({
-                  id: `solo-${soloCount}`,
+                  id: `solo-${date}`,
                   date: date,
-                  shopName: `獨吞 ${soloCount} 天`,
-                  itemName: '累積達成',
+                  shopName: `連續獨吞 ${consecutiveCount} 天`,
+                  itemName: '連續達成',
                   price: 0,
                   sourceRecords: [...currentBatchDrinks]
                 });
                 currentBatchDrinks = [];
+                consecutiveCount = 0;
               }
+            } else {
+              // 對方有喝，重置連續計數
+              consecutiveCount = 0;
+              currentBatchDrinks = [];
             }
           });
-          return { items: unlockedBatches, progress: soloCount % 15, target: 15 };
+          return { items: unlockedBatches, progress: consecutiveCount, target: 5 };
         }
       }
     ];
