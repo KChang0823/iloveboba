@@ -663,6 +663,7 @@
                   itemName: currentStreak[0].itemName,
                   count: currentStreak.length,
                   date: currentStreak[currentStreak.length - 1].date,
+                  timestamp: currentStreak[currentStreak.length - 1].timestamp,
                   sourceRecords: [...currentStreak]
                 });
               }
@@ -676,6 +677,7 @@
               itemName: currentStreak[0].itemName,
               count: currentStreak.length,
               date: currentStreak[currentStreak.length - 1].date,
+              timestamp: currentStreak[currentStreak.length - 1].timestamp,
               sourceRecords: [...currentStreak]
             });
           }
@@ -705,12 +707,17 @@
           const unlockedMonths = [];
           Object.entries(monthMap).forEach(([month, shopMap]) => {
             if (shopMap.size >= 5) {
+              // Get the latest drink in this set to use its timestamp
+              const allDrinksInSet = Array.from(shopMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+              const lastDrink = allDrinksInSet[allDrinksInSet.length - 1];
+
               unlockedMonths.push({
                 id: `explorer-${month}`,
                 date: month,
                 count: shopMap.size,
                 shopName: `解鎖 ${shopMap.size} 家店`,
                 itemName: '成就達成！',
+                timestamp: lastDrink.timestamp,
                 sourceRecords: Array.from(shopMap.values())
               });
             }
@@ -783,6 +790,7 @@
                   shopName: `連續獨吞 ${consecutiveCount} 天`,
                   itemName: '連續達成',
                   price: 0,
+                  timestamp: currentBatchDrinks[currentBatchDrinks.length - 1].timestamp,
                   sourceRecords: [...currentBatchDrinks]
                 });
                 currentBatchDrinks = [];
@@ -1914,9 +1922,18 @@
                           // Loose comparison for user to handle potential whitespace trimming differences
                           const userMatch = (m.user || '').trim() === user;
                           const titleMatch = m.title === ach.title;
+
+                          // Primary Check: Foreign Key (SourceDrinkID)
                           // Ensure the linked drink still exists (use String for type-safe comparison)
-                          const drinkExists = itemTimestamps.includes(String(m.sourceDrinkId));
-                          return userMatch && titleMatch && drinkExists;
+                          const isIdMatch = itemTimestamps.includes(String(m.sourceDrinkId));
+
+                          // Fallback Check: For legacy data (null ID), loosely match by Date/Month 
+                          // If sourceDrinkId is missing, allow a match if title/user are correct.
+                          // Ideally check date too: for 'Explorer' (YYYY-MM) or others (YYYY-MM-DD).
+                          // Just checking title/user is risky if they have multiple of same achievement, but for "Best Friends" etc. it's okay.
+                          const isLegacyMatch = !m.sourceDrinkId && titleMatch && userMatch;
+
+                          return userMatch && titleMatch && (isIdMatch || isLegacyMatch);
                         });
                         console.log(`Checking ${user} - ${ach.title}: Found ${relevantMemories.length} memories`, relevantMemories);
 
@@ -2276,7 +2293,16 @@
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 auto-rows-max pt-6">
                           {selectedAchievement.items.slice().reverse().map((item, i) => {
                             // Find linked photo (use String for type-safe comparison)
-                            const linkedPhoto = memoryPhotos.find(p => String(p.sourceDrinkId) === String(item.timestamp) && p.user === selectedAchievement.user);
+                            // Find linked photo (use String for type-safe comparison)
+                            // Also support fallback for legacy photos with no sourceDrinkId
+                            const linkedPhoto = memoryPhotos.find(p => {
+                              const isUserMatch = p.user === selectedAchievement.user;
+                              const isTitleMatch = p.title === selectedAchievement.title;
+                              const isIdMatch = String(p.sourceDrinkId) === String(item.timestamp);
+                              const isLegacyMatch = !p.sourceDrinkId && isUserMatch && isTitleMatch;
+
+                              return isIdMatch || isLegacyMatch;
+                            });
                             const seed = item.timestamp % 100;
                             const rotation = (seed % 6) - 3;
 
