@@ -2,7 +2,7 @@
 
 **ILOVEBOBA** 是一個充滿儀式感的珍奶紀錄應用。它不只是紀錄你喝了什麼，更將每一杯手搖飲的回憶轉化為精美的「拍立得」與「消費收據」，讓數據變得溫暖且具備收藏價值。
 
-![Version](https://img.shields.io/badge/version-7.7-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
+![Version](https://img.shields.io/badge/version-7.8-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
 
 ## ✨ 精選特色
 
@@ -40,7 +40,12 @@
 
 ## 🚀 版本紀錄 (Latest)
 
-### v7.7 (Current)
+### v7.8 (Current)
+*   **⚡ 延遲載入優化 (Lazy Loading)**: 初始只載入最近 3 個月的資料，大幅提升載入速度。切換到舊月份時會自動補載。
+*   **📊 全域統計 (Global Stats)**: 後端計算全時期總杯數與花費，確保數據不因延遲載入而遺失。
+*   **🐛 修復月度趨勢圖**: 月度杯數趨勢現在只顯示當年資料，不再混合不同年份。
+
+### v7.7
 *   **🐛 修復成就照片顯示問題**: 修正「嘗百草」、「飲料成癮」、「獨吞大師」等成就缺少時間戳記，導致無法正確連結照片的 Bug。
 *   **🛡️ 容錯機制 (Fallback Logic)**: 新增舊資料救援機制，自動透過「使用者+成就名稱」連結遺失 ID 的照片，救回消失的回憶。
 
