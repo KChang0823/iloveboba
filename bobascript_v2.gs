@@ -147,28 +147,71 @@ function doPost(e) {
 function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. 讀取飲料紀錄
+  // 參數解析
+  var p = e.parameter || {};
+  var startDateStr = p.startDate; // YYYY-MM-DD
+  var endDateStr = p.endDate;     // YYYY-MM-DD
+  // 如果沒有給日期，預設行為維持回傳全部 (或前端負責給預設值)
+  
+  var startDate = startDateStr ? new Date(startDateStr) : null;
+  var endDate = endDateStr ? new Date(endDateStr) : null;
+  // Adjust endDate to include the full day (23:59:59)
+  if (endDate) {
+    endDate.setHours(23, 59, 59, 999);
+  }
+
+  // 1. 讀取飲料紀錄 & 計算 Global Stats
   var sheet1 = ss.getSheetByName("工作表1");
   var records = [];
+  var globalStats = {
+    Kevin: { cups: 0, cost: 0 },
+    Ronnie: { cups: 0, cost: 0 }
+  };
+
   if (sheet1) {
     var rows = sheet1.getDataRange().getValues();
     for (var i = 1; i < rows.length; i++) {
       var row = rows[i];
-      if (!row[0]) continue;
-      records.push({
-        timestamp: String(row[0]),
-        date: row[1],
-        who: row[2],
-        shop: row[3],
-        item: row[4],
-        ice: row[5],
-        sugar: row[6],
-        price: row[7]
-      });
+      if (!row[0]) continue; // Skip empty timestamp
+
+      // data.date is column 1 (index 1), format usually 'YYYY-MM-DD'
+      var dString = row[1] ? String(row[1]).replace(/'/g, "") : "";
+      var dDate = dString ? new Date(dString) : null;
+      var who = row[2] ? String(row[2]).trim() : "";
+      var price = Number(row[7]) || 0;
+
+      // --- Accumulate Global Stats (Always) ---
+      if (who === "Kevin") {
+        globalStats.Kevin.cups += 1;
+        globalStats.Kevin.cost += price;
+      } else if (who === "Ronnie") {
+        globalStats.Ronnie.cups += 1;
+        globalStats.Ronnie.cost += price;
+      }
+
+      // --- Filter for Records List ---
+      var includeRecord = true;
+      if (startDate && endDate) {
+        if (!dDate) includeRecord = false; // No date, exclude if filtering
+        else if (dDate < startDate || dDate > endDate) includeRecord = false;
+      }
+
+      if (includeRecord) {
+        records.push({
+          timestamp: String(row[0]),
+          date: row[1],
+          who: row[2],
+          shop: row[3],
+          item: row[4],
+          ice: row[5],
+          sugar: row[6],
+          price: row[7]
+        });
+      }
     }
   }
 
-  // 2. 讀取成就回憶
+  // 2. 讀取成就回憶 (Always return all or separate logic? Return all for now to keep achievement wall working)
   var sheetAch = ss.getSheetByName("Achievements");
   var achievements = [];
   if (sheetAch) {
@@ -182,14 +225,15 @@ function doGet(e) {
         user: r[1],
         title: r[2],
         photoUrl: r[3],
-        sourceDrinkId: r[4] || null // Read FK
+        sourceDrinkId: r[4] || null
       });
     }
   }
 
   var result = {
     records: records,
-    achievements: achievements
+    achievements: achievements,
+    globalStats: globalStats
   };
   
   return ContentService.createTextOutput(JSON.stringify(result))

@@ -850,6 +850,30 @@
       }
     };
 
+    // --- NEW: Image Compression Helper ---
+    const resizeImage = (base64Str, maxWidth = 1600, quality = 0.8) => {
+      return new Promise((resolve) => {
+        let img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+          let canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          let ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+      });
+    };
+
     // --- NEW: Reusable Polaroid Component ---
     const PolaroidCard = ({ imageSrc, date, rotation = 'rotate-0', className = '', washiTapeColor = 'bg-yellow-400',
       isShaking = false, showStamp = false }) => {
@@ -1092,8 +1116,11 @@
         const file = event.target.files[0];
         if (file) {
           const reader = new FileReader();
-          reader.onloadend = () => {
-            setPhotoData(reader.result);
+          reader.onloadend = async () => {
+            const originalBase64 = reader.result;
+            // Compress image to max 2048px width, 0.95 quality (High Fidelity)
+            const compressedBase64 = await resizeImage(originalBase64, 2048, 0.95);
+            setPhotoData(compressedBase64);
             setPhase('PREVIEW');
           };
           reader.readAsDataURL(file);
@@ -1104,16 +1131,29 @@
         if (!photoData) return;
         setPhase('SAVING'); // Start "Shake"
 
+        // OPTIMISTIC UI:
+        // 1. Minimum "Shake" time for visual effect (1.5s)
+        // 2. Upload happens in background
+        const minShakeTime = new Promise(resolve => setTimeout(resolve, 1500));
+        const uploadPromise = uploadMemoryPhoto(photoData);
+
         try {
-          const photoUrl = await uploadMemoryPhoto(photoData);
+          // Wait for the shake animation to finish its mandatory duration
+          await minShakeTime;
+
+          // SHOW SUCCESS IMMEDIATELY (User feels it's done)
+          setPhase('SUCCESS');
+
+          // Continue waiting for upload in background while user sees "Success" stamp
+          const photoUrl = await uploadPromise;
+
+          // Once uploaded, Trigger saving to Sheet
           await onSaveMemory(photoUrl);
 
-          setPhase('SUCCESS'); // Start "Stamp"
-
-          // Wait for stamp animation then close
+          // Wait for stamp animation remainder before closing
           setTimeout(() => {
             onClose();
-          }, 2000);
+          }, 1200);
         } catch (e) {
           console.error("Upload failed", e);
           alert("上傳失敗，請重試");
@@ -1237,26 +1277,52 @@
       const [isShopDropdownOpen, setIsShopDropdownOpen] = useState(false);
       const [recordDateTime, setRecordDateTime] = useState('');
 
+      const [globalStats, setGlobalStats] = useState(null);
+      const [loadedMonths, setLoadedMonths] = useState(new Set()); // Format: "YYYY-M" (no padding to match getMonth())
       const [selectedAchievement, setSelectedAchievement] = useState(null);
       const [unlockedQueue, setUnlockedQueue] = useState([]);
       const [editingId, setEditingId] = useState(null);
       const [lightBoxPhoto, setLightBoxPhoto] = useState(null);
 
-      const fetchData = async () => {
+      const fetchData = async (startDate = null, endDate = null) => {
         setIsLoading(true);
         setStatusMsg('正在讀取資料...');
         try {
-          const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${new Date().getTime()}`);
+          // Construct URL params
+          let url = `${GOOGLE_SCRIPT_URL}?t=${new Date().getTime()}`;
+          if (startDate && endDate) {
+            const startStr = startDate.toISOString().split('T')[0];
+            const endStr = endDate.toISOString().split('T')[0];
+            url += `&startDate=${startStr}&endDate=${endStr}`;
+          }
+
+          const response = await fetch(url);
           if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
           const rawResponse = await response.json();
           // Compatible with old array format or new object format
           const data = Array.isArray(rawResponse) ? rawResponse : (rawResponse.records || []);
           const memories = Array.isArray(rawResponse) ? [] : (rawResponse.achievements || []);
+          const stats = rawResponse.globalStats || null; // { Kevin: {cups, cost}, Ronnie: ... }
 
+          if (stats) setGlobalStats(stats);
           setMemoryPhotos(memories);
           console.log('Data loaded:', data);
 
-          const newRecords = {};
+          // Mark months as loaded
+          if (startDate && endDate) {
+            const newLoaded = new Set(loadedMonths);
+            let current = new Date(startDate);
+            while (current <= endDate) {
+              newLoaded.add(`${current.getFullYear()}-${current.getMonth() + 1}`);
+              current.setMonth(current.getMonth() + 1);
+            }
+            setLoadedMonths(newLoaded);
+          } else {
+            // If full load (no params), assume all loaded? Or just reset?
+            // Maybe we shouldn't fully load anymore. But for safety:
+          }
+
+          const incomingRecords = {};
           if (Array.isArray(data)) {
             data.forEach((row, index) => {
               const rawTimestamp = row.timestamp;
@@ -1272,7 +1338,7 @@
               if (!normalizedDate) return;
               const hasValidId = !!rawTimestamp;
               const drink = {
-                id: `sheet-${index}`,
+                id: `sheet-${index}-${rawTimestamp}`, // Unique ID key
                 user: row.who ? row.who.trim() : row.who,
                 shopName: row.shop,
                 itemName: row.item,
@@ -1283,11 +1349,24 @@
                 timestamp: hasValidId ? rawTimestamp : Date.now(),
                 isDeletable: hasValidId
               };
-              if (!newRecords[normalizedDate]) newRecords[normalizedDate] = [];
-              newRecords[normalizedDate].push(drink);
+              if (!incomingRecords[normalizedDate]) incomingRecords[normalizedDate] = [];
+              incomingRecords[normalizedDate].push(drink);
             });
           }
-          setRecords(newRecords);
+
+          // MERGE with existing records instead of replacing
+          setRecords(prev => {
+            const merged = { ...prev };
+            // Use incoming to overwrite relevant days or append?
+            // Since we fetch by date range, we can safely overwrite the days in that range to avoid duplicates if re-fetched.
+            // But simpler is to spread... wait, prevent duplicates is important.
+            // Our strategy: incomingRecords keys are dates. We should replace those dates in prev.
+            Object.keys(incomingRecords).forEach(date => {
+              merged[date] = incomingRecords[date];
+            });
+            return merged;
+          });
+
           setStatusMsg('同步完成！');
           setTimeout(() => setStatusMsg(''), 3000);
         } catch (error) {
@@ -1298,7 +1377,12 @@
         }
       };
 
-      useEffect(() => { fetchData(); }, []);
+      // Initial Load: Last 3 months (Current - 2)
+      useEffect(() => {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        fetchData(start, now);
+      }, []);
 
       const isDailyLimitReached = useMemo(() => {
         const targetDate = recordDateTime ? recordDateTime.split('T')[0] : selectedDate;
@@ -1372,12 +1456,16 @@
       const ronnieStats = getStats('Ronnie');
 
       const getMonthlyData = () => {
+        const currentYear = new Date().getFullYear(); // 2026
         const data = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, Kevin: 0, Ronnie: 0 }));
         Object.entries(records).forEach(([dateStr, dayRecords]) => {
           if (!dateStr) return;
           const parts = dateStr.split('-');
-          if (parts.length < 2) return; const monthIndex = parseInt(parts[1], 10) - 1; if (monthIndex >= 0 && monthIndex <
-            12) {
+          if (parts.length < 2) return;
+          const year = parseInt(parts[0], 10);
+          if (year !== currentYear) return; // Only count current year
+          const monthIndex = parseInt(parts[1], 10) - 1;
+          if (monthIndex >= 0 && monthIndex < 12) {
             dayRecords.forEach(r => {
               const userKey = (r.user || '').trim();
               if (userKey === 'Kevin') data[monthIndex].Kevin++;
@@ -2094,13 +2182,18 @@
                         </div>
                         <div>
                           <div className={`text-xs font-bold ${u.textColor}`}>{u.name}</div>
-                          <div className="text-lg font-black text-[#5A3E2B]">{stats.cups} <span
-                            className="text-xs font-normal text-[#8D6E63]">杯</span></div>
+                          <div className="text-lg font-black text-[#5A3E2B]">
+                            {/* Use Global Stats if available, else fallback to loaded stats (which might be partial) */}
+                            {globalStats && globalStats[u.name] ? globalStats[u.name].cups : stats.cups} <span
+                              className="text-xs font-normal text-[#8D6E63]">杯</span>
+                          </div>
                         </div>
                       </div>
                       <div className="text-right z-10">
                         <div className="text-xs font-bold text-[#8D6E63] opacity-70">花費</div>
-                        <div className="font-bold text-[#5A3E2B]">${stats.cost}</div>
+                        <div className="font-bold text-[#5A3E2B]">${
+                          globalStats && globalStats[u.name] ? globalStats[u.name].cost : stats.cost
+                        }</div>
                       </div>
                       {isWin &&
                         <Icons.Trophy className="absolute -right-2 -bottom-2 text-yellow-400 opacity-20 rotate-12"
@@ -2117,7 +2210,16 @@
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white rounded-[2rem] p-2 shadow-sm border-2 border-white">
                   <div className="flex justify-between items-center p-4">
-                    <button onClick={handlePrevMonth}
+                    <button onClick={() => {
+                      handlePrevMonth();
+                      // Check if we need to load data
+                      const prevDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                      const monthKey = `${prevDate.getFullYear()}-${prevDate.getMonth() + 1}`;
+                      if (!loadedMonths.has(monthKey)) {
+                        const endDate = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0); // End of that month
+                        fetchData(prevDate, endDate);
+                      }
+                    }}
                       className="p-3 hover:bg-[#FFF8E1] rounded-2xl text-[#8D6E63] transition-colors">
                       <Icons.ChevronLeft size={20} />
                     </button>
@@ -2126,7 +2228,15 @@
                       <Icons.Calendar size={18} className="text-[#F4A261]" /> {currentDate.getFullYear()} 年
                       {currentDate.getMonth() + 1} 月
                     </h2>
-                    <button onClick={handleNextMonth}
+                    <button onClick={() => {
+                      handleNextMonth();
+                      const nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                      const monthKey = `${nextDate.getFullYear()}-${nextDate.getMonth() + 1}`;
+                      if (!loadedMonths.has(monthKey)) {
+                        const endDate = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0);
+                        fetchData(nextDate, endDate);
+                      }
+                    }}
                       className="p-3 hover:bg-[#FFF8E1] rounded-2xl text-[#8D6E63] transition-colors">
                       <Icons.ChevronRight size={20} />
                     </button>
@@ -2215,8 +2325,8 @@
                         sourceDrinkId: sourceDrinkId // New Foreign Key
                       })
                     });
-                    // Refresh data to show the new photo immediately
-                    await fetchData();
+                    // Refresh data in background (don't await) so UI doesn't block
+                    fetchData();
                     // After save, close modal (the modal itself handles the timeout delay for UX)
                   }}
                 />
