@@ -1696,6 +1696,8 @@
           const clientY = e.touches ? e.touches[0].clientY : e.clientY;
           const diff = clientY - pullStartY.current;
           if (diff > 0) {
+            // Prevent native browser pull-to-refresh 
+            if (e.cancelable) e.preventDefault();
             setPullMoveY(diff);
           }
         }
