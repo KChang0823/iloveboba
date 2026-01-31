@@ -5,6 +5,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>我超愛喝手搖</title>
+  <link rel="icon" href="https://res.cloudinary.com/dh1ehevs0/image/upload/v1769864696/iloveboba_favicon_f5cgan.png"
+    type="image/png">
+  <link rel="apple-touch-icon"
+    href="https://res.cloudinary.com/dh1ehevs0/image/upload/v1769864696/iloveboba_favicon_f5cgan.png">
 
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -741,11 +745,13 @@
             const otherDrinks = dayDrinks.filter(d => (d.user || '').trim() !== currentUser);
 
             myDrinks.forEach(myD => {
+              // Only trigger if the CURRENT user is the SECOND one to drink (follower)
               const matchedPartnerDrink = otherDrinks.find(otherD =>
                 otherD.shopName === myD.shopName &&
                 otherD.itemName === myD.itemName &&
                 otherD.ice === myD.ice &&
-                otherD.sugar === myD.sugar
+                otherD.sugar === myD.sugar &&
+                Number(otherD.timestamp) < Number(myD.timestamp) // Enforce order: Partner must have drunk BEFORE me
               );
 
               if (matchedPartnerDrink) {
@@ -1667,6 +1673,69 @@
         setIsSending(false);
       };
 
+      const pullStartY = useRef(0);
+      const [pullMoveY, setPullMoveY] = useState(0);
+      const [isRefreshing, setIsRefreshing] = useState(false);
+
+      const handleTouchStart = (e) => {
+        if (window.scrollY === 0) {
+          pullStartY.current = e.touches[0].clientY;
+        }
+      };
+
+      const handleTouchMove = (e) => {
+        if (pullStartY.current > 0 && window.scrollY === 0) {
+          const currentY = e.touches[0].clientY;
+          const diff = currentY - pullStartY.current;
+          if (diff > 0) {
+            setPullMoveY(diff);
+          }
+        }
+      };
+
+      const handleTouchEnd = async () => {
+        if (pullMoveY > 80) { // Threshold to trigger refresh
+          setIsRefreshing(true);
+          setPullMoveY(80); // Snap to loading position
+
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+          await fetchData(start, now);
+          setIsRefreshing(false);
+          setPullMoveY(0);
+        } else if (pullMoveY > 0) {
+          // Only reset if we actually moved but cancelled
+          setPullMoveY(0);
+        }
+        pullStartY.current = 0;
+      };
+
+      // --- NEW: Refresh Indicator Component ---
+      const RefreshIndicator = ({ pullMoveY, isRefreshing }) => {
+        // Calculate opacity/rotation based on pull distance
+        const opacity = Math.min(pullMoveY / 60, 1);
+        const rotate = pullMoveY * 2;
+
+        if (pullMoveY === 0 && !isRefreshing) return null;
+
+        return (
+          <div style={{
+            transform: `translateY(${Math.min(pullMoveY, 120)}px) translateX(-50%)`,
+            position: 'fixed',
+            top: '-40px', // Start mostly hidden
+            left: '50%',
+            zIndex: 50,
+            opacity: isRefreshing ? 1 : opacity,
+            transition: isRefreshing ? 'transform 0.3s' : 'none'
+          }} className="pointer-events-none">
+            <div className={`w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-[#FFCB7D] ${isRefreshing ? 'animate-spin' : ''}`}
+              style={{ transform: `rotate(${isRefreshing ? 0 : rotate}deg)` }}>
+              <Icons.RefreshCw size={20} className="text-[#5A3E2B]" />
+            </div>
+          </div>
+        );
+      };
+
       const handleDeleteDrink = async (drink) => {
         if (!drink.isDeletable) {
           setStatusMsg("無法刪除 (無ID)，僅移除畫面");
@@ -2119,7 +2188,13 @@
 
       return (
         <div
-          className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B]">
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B] overscroll-none touch-pan-y md:overscroll-auto md:touch-auto">
+
+          <RefreshIndicator pullMoveY={pullMoveY} isRefreshing={isRefreshing} />
+
           {/* ... (rest of the render) ... */}
           {/* Since we can't easily do Portals in this single-file setup without more complexity,
               we will keep the Modal inside BobaTracker but at the very end of the outer div
@@ -2142,10 +2217,11 @@
               {/* FLEX FIX: Stack vertically on mobile */}
               <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                  <div
-                    className="bg-gradient-to-tr from-[#FFCB7D] to-[#FFDCA9] p-2.5 rounded-2xl text-[#5A3E2B] shadow-inner transform hover:rotate-12 transition-transform">
-                    <BobaIcon size={24} />
-                  </div>
+                  <img
+                    src="https://res.cloudinary.com/dh1ehevs0/image/upload/v1769864696/iloveboba_favicon_f5cgan.png"
+                    alt="Logo"
+                    className="w-12 h-12 object-contain transform hover:rotate-12 transition-transform cursor-pointer"
+                  />
                   <div className="flex-1 md:flex-none">
                     <h1 className="text-2xl font-black tracking-wider text-[#5A3E2B]">我超愛喝手搖</h1>
                     <p className="text-[#8D6E63] text-xs font-bold mt-0.5 flex items-center gap-2">Kevin <span
