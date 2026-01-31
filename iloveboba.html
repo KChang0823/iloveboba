@@ -1688,19 +1688,50 @@
         if (!container) return;
 
         const handleTouchStart = (e) => {
-          if (window.scrollY <= 5 && !isRefreshing) {
+          // 1. Block refresh if any modal/overlay is open
+          if (isModalOpen || isRandomizerOpen || selectedAchievement || lightBoxPhoto || editingId || isShopDropdownOpen) {
+            return;
+          }
+
+          // 2. Check if main window is at top (with tolerance)
+          const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+          if (scrollTop > 10) return;
+
+          // 3. Check if target element is inside a scrollable container that is NOT at top
+          let target = e.target;
+          let isInternalScroll = false;
+          while (target && target !== containerRef.current) {
+            const style = window.getComputedStyle(target);
+            const overflowY = style.overflowY;
+            const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && target.scrollHeight > target.clientHeight;
+
+            if (isScrollable && target.scrollTop > 0) {
+              isInternalScroll = true;
+              break;
+            }
+            target = target.parentElement;
+          }
+          if (isInternalScroll) return;
+
+          if (!isRefreshing) {
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             pullStartY.current = clientY;
           }
         };
 
         const handleTouchMove = (e) => {
-          if (pullStartY.current > 0 && window.scrollY <= 5 && !isRefreshing) {
+          // Robust top check
+          const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+
+          if (pullStartY.current > 0 && scrollTop <= 10 && !isRefreshing) {
             // Check mouse button if not touch
             if (!e.touches && e.buttons !== 1) return;
 
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const diff = clientY - pullStartY.current;
+            const rawDiff = clientY - pullStartY.current;
+
+            // Apply damping/resistance (0.4x speed)
+            const diff = rawDiff * 0.4;
 
             if (diff > 0) {
               // Only prevent default if strictly pulling down
@@ -1737,11 +1768,13 @@
         container.addEventListener('touchend', handleTouchEnd, { passive: true });
 
         // Mouse events
+        // Mouse events
         container.addEventListener('mousedown', handleTouchStart);
         container.addEventListener('mousemove', handleTouchMove);
         container.addEventListener('mouseup', handleTouchEnd);
         container.addEventListener('mouseleave', handleTouchEnd);
-        container.addEventListener('touchend', handleTouchEnd, { passive: true });
+        // Note: 'touchend' is already added above for touch, we don't need it twice or for mouse
+        // But for mouse, 'mouseup' covers it. 'touchend' above covers touch.
 
         return () => {
           container.removeEventListener('touchstart', handleTouchStart);
