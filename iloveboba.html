@@ -1682,14 +1682,14 @@
       const [isRefreshing, setIsRefreshing] = useState(false);
 
       const handleTouchStart = (e) => {
-        if (window.scrollY === 0) {
+        if (window.scrollY <= 5) {
           const clientY = e.touches ? e.touches[0].clientY : e.clientY;
           pullStartY.current = clientY;
         }
       };
 
       const handleTouchMove = (e) => {
-        if (pullStartY.current > 0 && window.scrollY === 0) {
+        if (pullStartY.current > 0 && window.scrollY <= 5) {
           // Check if primary mouse button is pressed for mouse events
           if (!e.touches && e.buttons !== 1) return;
 
@@ -1734,13 +1734,16 @@
             position: 'fixed',
             top: '-40px', // Start mostly hidden
             left: '50%',
-            zIndex: 50,
+            zIndex: 9999,
             opacity: isRefreshing ? 1 : opacity,
             transition: isRefreshing ? 'transform 0.3s' : 'none'
           }} className="pointer-events-none">
-            <div className={`w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-[#FFCB7D] ${isRefreshing ? 'animate-spin' : ''}`}
-              style={{ transform: `rotate(${isRefreshing ? 0 : rotate}deg)` }}>
-              <Icons.RefreshCw size={20} className="text-[#5A3E2B]" />
+            <div className="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-[#FFCB7D]">
+              <Icons.RefreshCw
+                size={20}
+                className={`text-[#5A3E2B] ${isRefreshing ? 'animate-spin' : ''}`}
+                style={{ transform: isRefreshing ? 'none' : `rotate(${rotate}deg)` }}
+              />
             </div>
           </div>
         );
