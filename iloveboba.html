@@ -1697,22 +1697,7 @@
           const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
           if (scrollTop > 10) return;
 
-          // 3. Check if target element is inside a scrollable container that is NOT at top
-          let target = e.target;
-          let isInternalScroll = false;
-          while (target && target !== containerRef.current) {
-            const style = window.getComputedStyle(target);
-            const overflowY = style.overflowY;
-            const isScrollable = (overflowY === 'auto' || overflowY === 'scroll') && target.scrollHeight > target.clientHeight;
-
-            if (isScrollable && target.scrollTop > 0) {
-              isInternalScroll = true;
-              break;
-            }
-            target = target.parentElement;
-          }
-          if (isInternalScroll) return;
-
+          // 3. Allow refresh to proceed
           if (!isRefreshing) {
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             pullStartY.current = clientY;
