@@ -1689,16 +1689,22 @@
 
         const handleTouchStart = (e) => {
           if (window.scrollY <= 5 && !isRefreshing) {
-            pullStartY.current = e.touches[0].clientY;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            pullStartY.current = clientY;
           }
         };
 
         const handleTouchMove = (e) => {
           if (pullStartY.current > 0 && window.scrollY <= 5 && !isRefreshing) {
-            const currentY = e.touches[0].clientY;
-            const diff = currentY - pullStartY.current;
+            // Check mouse button if not touch
+            if (!e.touches && e.buttons !== 1) return;
+
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const diff = clientY - pullStartY.current;
+
             if (diff > 0) {
-              e.preventDefault(); // This works because passive: false
+              // Only prevent default if strictly pulling down
+              if (e.cancelable && e.touches) e.preventDefault();
               setPullMoveY(diff);
             }
           }
@@ -1725,14 +1731,26 @@
           pullStartY.current = 0;
         };
 
+        // Touch events
         container.addEventListener('touchstart', handleTouchStart, { passive: true });
         container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+        // Mouse events
+        container.addEventListener('mousedown', handleTouchStart);
+        container.addEventListener('mousemove', handleTouchMove);
+        container.addEventListener('mouseup', handleTouchEnd);
+        container.addEventListener('mouseleave', handleTouchEnd);
         container.addEventListener('touchend', handleTouchEnd, { passive: true });
 
         return () => {
           container.removeEventListener('touchstart', handleTouchStart);
           container.removeEventListener('touchmove', handleTouchMove);
           container.removeEventListener('touchend', handleTouchEnd);
+          container.removeEventListener('mousedown', handleTouchStart);
+          container.removeEventListener('mousemove', handleTouchMove);
+          container.removeEventListener('mouseup', handleTouchEnd);
+          container.removeEventListener('mouseleave', handleTouchEnd);
         };
       }, [isRefreshing, pullMoveY]);
 
@@ -2217,7 +2235,7 @@
       return (
         <div
           ref={containerRef}
-          className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B] overscroll-none touch-none md:overscroll-auto md:touch-auto">
+          className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B] overscroll-none touch-pan-y md:overscroll-auto md:touch-auto">
 
           <RefreshIndicator pullMoveY={pullMoveY} isRefreshing={isRefreshing} />
 
