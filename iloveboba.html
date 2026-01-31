@@ -9,6 +9,10 @@
     type="image/png">
   <link rel="apple-touch-icon"
     href="https://res.cloudinary.com/dh1ehevs0/image/upload/v1769864696/iloveboba_favicon_f5cgan.png">
+  <link rel="apple-touch-icon-precomposed"
+    href="https://res.cloudinary.com/dh1ehevs0/image/upload/v1769864696/iloveboba_favicon_f5cgan.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -1679,14 +1683,18 @@
 
       const handleTouchStart = (e) => {
         if (window.scrollY === 0) {
-          pullStartY.current = e.touches[0].clientY;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          pullStartY.current = clientY;
         }
       };
 
       const handleTouchMove = (e) => {
         if (pullStartY.current > 0 && window.scrollY === 0) {
-          const currentY = e.touches[0].clientY;
-          const diff = currentY - pullStartY.current;
+          // Check if primary mouse button is pressed for mouse events
+          if (!e.touches && e.buttons !== 1) return;
+
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          const diff = clientY - pullStartY.current;
           if (diff > 0) {
             setPullMoveY(diff);
           }
@@ -2185,12 +2193,15 @@
       };
 
 
-
       return (
         <div
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onMouseDown={handleTouchStart}
+          onMouseMove={handleTouchMove}
+          onMouseUp={handleTouchEnd}
+          onMouseLeave={handleTouchEnd}
           className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B] overscroll-none touch-pan-y md:overscroll-auto md:touch-auto">
 
           <RefreshIndicator pullMoveY={pullMoveY} isRefreshing={isRefreshing} />
