@@ -1680,45 +1680,61 @@
       const pullStartY = useRef(0);
       const [pullMoveY, setPullMoveY] = useState(0);
       const [isRefreshing, setIsRefreshing] = useState(false);
+      const containerRef = useRef(null);
 
-      const handleTouchStart = (e) => {
-        if (window.scrollY <= 5) {
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-          pullStartY.current = clientY;
-        }
-      };
+      // Use native event listeners for proper passive: false support on iOS
+      useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
 
-      const handleTouchMove = (e) => {
-        if (pullStartY.current > 0 && window.scrollY <= 5) {
-          // Check if primary mouse button is pressed for mouse events
-          if (!e.touches && e.buttons !== 1) return;
-
-          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-          const diff = clientY - pullStartY.current;
-          if (diff > 0) {
-            // Prevent native browser pull-to-refresh 
-            if (e.cancelable) e.preventDefault();
-            setPullMoveY(diff);
+        const handleTouchStart = (e) => {
+          if (window.scrollY <= 5 && !isRefreshing) {
+            pullStartY.current = e.touches[0].clientY;
           }
-        }
-      };
+        };
 
-      const handleTouchEnd = async () => {
-        if (pullMoveY > 80) { // Threshold to trigger refresh
-          setIsRefreshing(true);
-          setPullMoveY(80); // Snap to loading position
+        const handleTouchMove = (e) => {
+          if (pullStartY.current > 0 && window.scrollY <= 5 && !isRefreshing) {
+            const currentY = e.touches[0].clientY;
+            const diff = currentY - pullStartY.current;
+            if (diff > 0) {
+              e.preventDefault(); // This works because passive: false
+              setPullMoveY(diff);
+            }
+          }
+        };
 
-          const now = new Date();
-          const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-          await fetchData(start, now);
-          setIsRefreshing(false);
-          setPullMoveY(0);
-        } else if (pullMoveY > 0) {
-          // Only reset if we actually moved but cancelled
-          setPullMoveY(0);
-        }
-        pullStartY.current = 0;
-      };
+        const handleTouchEnd = async () => {
+          if (pullMoveY > 80 && !isRefreshing) {
+            setIsRefreshing(true);
+            setPullMoveY(80);
+
+            try {
+              const now = new Date();
+              const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+              await fetchData(start, now);
+            } catch (err) {
+              console.error('Refresh failed:', err);
+            } finally {
+              setIsRefreshing(false);
+              setPullMoveY(0);
+            }
+          } else if (pullMoveY > 0) {
+            setPullMoveY(0);
+          }
+          pullStartY.current = 0;
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: true });
+        container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+        return () => {
+          container.removeEventListener('touchstart', handleTouchStart);
+          container.removeEventListener('touchmove', handleTouchMove);
+          container.removeEventListener('touchend', handleTouchEnd);
+        };
+      }, [isRefreshing, pullMoveY]);
 
       // --- NEW: Refresh Indicator Component ---
       const RefreshIndicator = ({ pullMoveY, isRefreshing }) => {
@@ -2200,14 +2216,8 @@
 
       return (
         <div
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleTouchStart}
-          onMouseMove={handleTouchMove}
-          onMouseUp={handleTouchEnd}
-          onMouseLeave={handleTouchEnd}
-          className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B] overscroll-none touch-pan-y md:overscroll-auto md:touch-auto">
+          ref={containerRef}
+          className="min-h-screen bg-[#FFFBF0] text-[#5A3E2B] font-sans pb-24 md:pb-10 relative overflow-x-hidden selection:bg-[#FFE0B2] selection:text-[#5A3E2B] overscroll-none touch-none md:overscroll-auto md:touch-auto">
 
           <RefreshIndicator pullMoveY={pullMoveY} isRefreshing={isRefreshing} />
 
