@@ -689,8 +689,10 @@
               sourceRecords: [...currentStreak]
             });
           }
-
-          return { items: streaks, progress: streaks.length, target: 1 };
+          // If no completed streaks, show current streak progress toward 3
+          // Otherwise show how many streaks have been completed
+          const currentProgress = streaks.length > 0 ? streaks.length : Math.min(currentStreak.length, 2);
+          return { items: streaks, progress: currentProgress, target: 3 };
         }
       },
       {
@@ -731,9 +733,12 @@
             }
           });
 
-          const maxShops = Object.values(monthMap).reduce((max, map) => Math.max(max, map.size), 0);
+          // Get current month's progress
+          const now = new Date();
+          const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const currentMonthShops = monthMap[currentMonthKey] ? monthMap[currentMonthKey].size : 0;
 
-          return { items: unlockedMonths, progress: maxShops, target: 5 };
+          return { items: unlockedMonths, progress: currentMonthShops, target: 5 };
         }
       },
       {
@@ -950,8 +955,11 @@
     };
 
     // --- NEW: Lightbox Component with 3D Flip ---
-    const MemoryLightbox = ({ photo, onClose }) => {
+    const MemoryLightbox = ({ photo, onClose, onPhotoUploaded }) => {
       const [isFlipped, setIsFlipped] = useState(!photo?.photoUrl);
+      const [isUploading, setIsUploading] = useState(false);
+      const [currentPhotoUrl, setCurrentPhotoUrl] = useState(photo?.photoUrl);
+      const fileInputRef = useRef(null);
 
       if (!photo) return null;
 
@@ -960,8 +968,95 @@
         setIsFlipped(!isFlipped);
       };
 
+      const handleFileSelect = async (e) => {
+        console.log('=== handleFileSelect triggered ===');
+        const file = e.target.files?.[0];
+        console.log('File selected:', file);
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+          console.log('1. Starting resize...');
+          // Convert File to base64 first
+          const fileToBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+
+          const base64Data = await fileToBase64(file);
+          console.log('1b. File converted to base64, length:', base64Data.length);
+
+          // Resize the image
+          const resizedBase64 = await resizeImage(base64Data, 1200, 0.85);
+          console.log('2. Resize complete, base64 length:', resizedBase64.length);
+
+          // Convert base64 back to Blob for upload
+          const base64ToBlob = (base64) => {
+            const [header, data] = base64.split(',');
+            const mime = header.match(/:(.*?);/)[1];
+            const binary = atob(data);
+            const array = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              array[i] = binary.charCodeAt(i);
+            }
+            return new Blob([array], { type: mime });
+          };
+
+          const resizedBlob = base64ToBlob(resizedBase64);
+          console.log('2b. Blob created, size:', resizedBlob.size);
+
+          const formData = new FormData();
+          formData.append('file', resizedBlob);
+          formData.append('upload_preset', 'iloveboba');
+
+          console.log('3. Uploading to Cloudinary...');
+          const response = await fetch('https://api.cloudinary.com/v1_1/dh1ehevs0/image/upload', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await response.json();
+          console.log('4. Cloudinary response:', data);
+
+          if (!data.secure_url) {
+            throw new Error('Cloudinary did not return a URL: ' + JSON.stringify(data));
+          }
+          const photoUrl = data.secure_url;
+          console.log('5. Photo URL:', photoUrl);
+
+          console.log('6. Updating backend with:', { sourceDrinkId: photo.sourceDrinkId, user: photo.user, title: photo.title });
+          // Update backend
+          const gsResponse = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+              action: 'UPDATE_ACHIEVEMENT_PHOTO',
+              sourceDrinkId: photo.sourceDrinkId,
+              user: photo.user,
+              title: photo.title,
+              photoUrl: photoUrl
+            })
+          });
+          const gsData = await gsResponse.json();
+          console.log('7. GS response:', gsData);
+
+          setCurrentPhotoUrl(photoUrl);
+          setIsFlipped(false); // Show the new photo
+          console.log('8. Success! Photo updated in state.');
+          if (onPhotoUploaded) onPhotoUploaded();
+        } catch (err) {
+          console.error('Upload failed:', err);
+          alert('上傳失敗: ' + err.message);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
       return (
         <div className="fixed inset-0 z-[999] bg-black/90 overflow-hidden backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+          <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleFileSelect} onClick={(e) => e.stopPropagation()} />
+
           <div className="h-screen w-full flex items-center justify-center p-4">
             <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="fixed top-4 right-4 text-white/50 hover:text-white transition-colors z-[1000]">
               <Icons.X size={32} />
@@ -971,7 +1066,7 @@
             <div className="group w-full max-w-md perspective-1000 cursor-pointer" onClick={handleFlip}>
               <div className={`relative w-full transition-transform duration-700 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
 
-                {/* FRONT: Photo (Relative when visible) */}
+                {/* FRONT: Photo or Upload Button */}
                 <div className={`${isFlipped ? 'absolute inset-0 opacity-0 pointer-events-none' : 'relative'} backface-hidden bg-white p-4 pb-16 shadow-2xl rounded-sm flex flex-col items-center justify-center transition-opacity duration-300`}>
                   {/* Tape */}
                   <div className={`absolute -top-2 left-1/2 -translate-x-1/2 w-[35%] h-5 ${photo.tapeColor || 'bg-amber-200'} shadow-sm z-20`} style={{
@@ -980,8 +1075,32 @@
                     maskImage: 'repeating-linear-gradient(-45deg,transparent,transparent 2px,black 3px,black 6px)'
                   }}></div>
 
-                  <div className="w-full aspect-square bg-gray-100 overflow-hidden relative border border-black/5">
-                    <img src={transformCloudinaryUrl(photo.photoUrl)} className="w-full h-full object-cover" />
+                  <div className="w-full aspect-square bg-gray-100 overflow-hidden relative border border-black/5 flex items-center justify-center">
+                    {currentPhotoUrl ? (
+                      <img src={transformCloudinaryUrl(currentPhotoUrl)} className="w-full h-full object-cover" />
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log('Upload button clicked!', fileInputRef.current);
+                          fileInputRef.current?.click();
+                        }}
+                        disabled={isUploading}
+                        className="flex flex-col items-center gap-3 text-gray-400 hover:text-[#5A3E2B] transition-colors p-8"
+                      >
+                        {isUploading ? (
+                          <>
+                            <Icons.RefreshCw size={48} className="animate-spin text-[#FFCB7D]" />
+                            <span className="text-sm font-bold">上傳中...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Icons.Camera size={48} />
+                            <span className="text-sm font-bold">點擊上傳照片</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   <div className="absolute bottom-6 text-gray-400 font-mono text-xs flex items-center gap-2">
@@ -1198,7 +1317,11 @@
                   className="w-full py-4 bg-[#5A3E2B] text-[#FFCB7D] rounded-2xl font-black text-lg shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
                   <Icons.Camera size={24} /> 拍照留念
                 </button>
-                <button onClick={onClose}
+                <button onClick={async () => {
+                  // Save achievement even when skipping photo (empty photoUrl)
+                  await onSaveMemory(null);
+                  onClose();
+                }}
                   className="w-full py-3 text-[#A1887F] font-bold text-sm hover:bg-[#A1887F]/10 rounded-xl transition-colors">
                   以後再說
                 </button>
@@ -1269,7 +1392,7 @@
 
     const BobaTracker = () => {
       const [currentView, setCurrentView] = useState('calendar');
-      const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1));
+      const [currentDate, setCurrentDate] = useState(new Date());
       const [selectedDate, setSelectedDate] = useState(null);
       const [records, setRecords] = useState({});
       const [memoryPhotos, setMemoryPhotos] = useState([]);
@@ -2137,30 +2260,15 @@
                         const tapeRotation = (seed % 6) - 3;
 
                         // Find latest photo for thumbnail
-                        // DEBUG: Check data availability
-                        // console.log('All Users Memories:', memoryPhotos);
-                        const itemTimestamps = ach.items.map(item => String(item.timestamp));
-                        const relevantMemories = memoryPhotos.filter(m => {
-                          // Loose comparison for user to handle potential whitespace trimming differences
+                        // Simple logic: Find the latest achievement record for this user+title
+                        // If it has photoUrl → show photo, else → show sticker
+                        const matchingRecords = memoryPhotos.filter(m => {
                           const userMatch = (m.user || '').trim() === user;
                           const titleMatch = m.title === ach.title;
-
-                          // Primary Check: Foreign Key (SourceDrinkID)
-                          // Ensure the linked drink still exists (use String for type-safe comparison)
-                          const isIdMatch = itemTimestamps.includes(String(m.sourceDrinkId));
-
-                          // Fallback Check: For legacy data (null ID), loosely match by Date/Month 
-                          // If sourceDrinkId is missing, allow a match if title/user are correct.
-                          // Ideally check date too: for 'Explorer' (YYYY-MM) or others (YYYY-MM-DD).
-                          // Just checking title/user is risky if they have multiple of same achievement, but for "Best Friends" etc. it's okay.
-                          const isLegacyMatch = !m.sourceDrinkId && titleMatch && userMatch;
-
-                          return userMatch && titleMatch && (isIdMatch || isLegacyMatch);
+                          return userMatch && titleMatch;
                         });
-                        console.log(`Checking ${user} - ${ach.title}: Found ${relevantMemories.length} memories`, relevantMemories);
-
-                        const latestMemory = relevantMemories.length > 0 ? relevantMemories[relevantMemories.length - 1] :
-                          null;
+                        // memoryPhotos is already in chronological order from GS, so last one is latest
+                        const latestMemory = matchingRecords.length > 0 ? matchingRecords[matchingRecords.length - 1] : null;
 
                         const tapeColor = ach.tapeColor || 'bg-red-400/30';
 
@@ -2436,7 +2544,7 @@
             isRandomizerOpen &&
             <RandomizerModal />
           }
-          {lightBoxPhoto && <MemoryLightbox photo={lightBoxPhoto} onClose={() => setLightBoxPhoto(null)} />}
+          {lightBoxPhoto && <MemoryLightbox photo={lightBoxPhoto} onClose={() => setLightBoxPhoto(null)} onPhotoUploaded={fetchData} />}
 
           {
             unlockedQueue.length > 0 && (
@@ -2547,7 +2655,8 @@
                               const isUserMatch = p.user === selectedAchievement.user;
                               const isTitleMatch = p.title === selectedAchievement.title;
                               const isIdMatch = String(p.sourceDrinkId) === String(item.timestamp);
-                              const isLegacyMatch = !p.sourceDrinkId && isUserMatch && isTitleMatch;
+                              // Strict Legacy Date Match
+                              const isLegacyMatch = !p.sourceDrinkId && isUserMatch && isTitleMatch && p.date === item.date;
 
                               return isIdMatch || isLegacyMatch;
                             });
@@ -2584,7 +2693,7 @@
                               /* TYPE B: RECEIPT STUB (No Photo) */
                               return (
                                 <div key={i}
-                                  onClick={() => setLightBoxPhoto({ ...item, id: selectedAchievement.id, tapeColor: selectedAchievement.tapeColor, photoUrl: null })}
+                                  onClick={() => setLightBoxPhoto({ ...item, id: selectedAchievement.id, tapeColor: selectedAchievement.tapeColor, photoUrl: null, user: selectedAchievement.user, title: selectedAchievement.title, sourceDrinkId: item.timestamp })}
                                   className="relative group bg-[#FAFAFA] text-[#5D4037] p-4 shadow-sm flex flex-col justify-between min-h-[180px] font-mono text-xs border-t-2 border-dashed border-gray-300/50 cursor-pointer hover:shadow-md transition-shadow">
                                   {/* Zigzag decoration could be done with CSS background patterns or clip-path if desired, simplified here as dashed border */}
 

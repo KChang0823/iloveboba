@@ -39,6 +39,47 @@ function doPost(e) {
     }
 
     // ==========================================
+    // 📸 更新成就照片 (Update Achievement Photo)
+    // ==========================================
+    if (action === 'UPDATE_ACHIEVEMENT_PHOTO') {
+      var achievementSheet = ss.getSheetByName("Achievements");
+      if (!achievementSheet) {
+        return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'Achievements sheet not found'}));
+      }
+
+      var rows = achievementSheet.getDataRange().getValues();
+      var updated = false;
+
+      // Find matching row by sourceDrinkId first, then by user+title
+      for (var i = rows.length - 1; i >= 1; i--) {
+        var row = rows[i];
+        var rowUser = String(row[1] || '').trim();
+        var rowTitle = String(row[2] || '');
+        var rowSourceId = String(row[4] || '');
+        
+        var isMatch = false;
+        if (data.sourceDrinkId && rowSourceId === String(data.sourceDrinkId)) {
+          isMatch = true;
+        } else if (!data.sourceDrinkId && rowUser === String(data.user).trim() && rowTitle === data.title) {
+          isMatch = true;
+        }
+
+        if (isMatch) {
+          // Update PhotoUrl (column D = index 4 = column number 4)
+          achievementSheet.getRange(i + 1, 4).setValue(data.photoUrl || '');
+          updated = true;
+          break;
+        }
+      }
+
+      if (updated) {
+        return ContentService.createTextOutput(JSON.stringify({status: 'success', message: 'Photo Updated'}));
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({status: 'error', message: 'Achievement not found'}));
+      }
+    }
+
+    // ==========================================
     // 🧋 原本功能：手搖飲紀錄 (Beverage Logic)
     // ==========================================
     
