@@ -30,7 +30,7 @@ function doPost(e) {
         data.user,             // 前端傳來的 user
         data.achievementTitle, // 前端傳來的 achievementTitle
         data.photoUrl || "",   // 前端傳來的 photoUrl
-        data.sourceDrinkId || "" // 外鍵：觸發此成就的飲料 ID
+        data.sourceDrinkId ? String(data.sourceDrinkId) : "" // 外鍵：觸發此成就的飲料 ID
       ];
 
       achievementSheet.appendRow(newAchievement);
@@ -266,7 +266,7 @@ function doGet(e) {
         user: r[1],
         title: r[2],
         photoUrl: r[3],
-        sourceDrinkId: r[4] || null
+        sourceDrinkId: r[4] ? String(r[4]) : null
       });
     }
   }

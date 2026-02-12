@@ -2,7 +2,7 @@
 
 **ILOVEBOBA** 是一個充滿儀式感的珍奶紀錄應用。它不只是紀錄你喝了什麼，更將每一杯手搖飲的回憶轉化為精美的「拍立得」與「消費收據」，讓數據變得溫暖且具備收藏價值。
 
-![Version](https://img.shields.io/badge/version-7.9-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
+![Version](https://img.shields.io/badge/version-8.0-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
 
 ## ✨ 精選特色
 
@@ -40,7 +40,14 @@
 
 ## 🚀 版本紀錄 (Latest)
 
-### v7.9 (Current)
+### v8.0 (Current)
+*   **🪞 拍照鏡像翻轉 (Camera Flip)**: 新增 `flipImage` 函式，拍照後自動水平翻轉（修正自拍鏡像問題），並提供手動翻轉按鈕供用戶切換。
+*   **🎨 Duotone Flip 圖示**: 採用 Phosphor Icons 的 `flip-horizontal` (Duotone) 風格圖示，與 UI 主題配色 `#FFCB7D` 一致。
+*   **🐛 修復成就照片不顯示**: 根因為 Google Sheets 將 16 位數 `SourceDrinkID` 自動轉換為數字，導致 JavaScript IEEE 754 精度丟失。修復包含：
+    *   **後端 (`bobascript_v2.gs`)**: `doGet` 中 `sourceDrinkId` 改為 `String(r[4])` 確保讀取為字串。
+    *   **前端 (`iloveboba.html`)**: Grid 照片匹配新增 `user + title` fallback 邏輯，即使 ID 精度丟失仍能正確顯示照片。
+
+### v7.9
 *   **📸 補拍照片功能**: Lightbox 中沒有照片的成就可以直接點擊上傳，補拍照片儲存到 Cloudinary。
 *   **🔓 成就解鎖全紀錄**: 即使選擇「以後再說」不拍照，也會在 Achievements 表記錄解鎖事件。
 *   **📊 進度條修正**: 「專情的人」成就進度改為顯示當前連續次數 (0~3)，而非完成次數。

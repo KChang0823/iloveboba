@@ -446,6 +446,12 @@
         <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
         <line x1="12" x2="12.01" y1="20" y2="20" />
       </svg>,
+      FlipHorizontal: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 256 256"
+        fill="#FFCB7D" stroke="none"
+        className={props.className}>
+        <path d="M112,40V200a8,8,0,0,1-8,8H40a8,8,0,0,1-7.37-11.12l64-160C100,28.86,112,31.29,112,40Z" opacity="0.2"></path>
+        <path d="M107.18,24.33a15.86,15.86,0,0,0-17.92,9.45l-.06.14-64,159.93A16,16,0,0,0,40,216h64a16,16,0,0,0,16-16V40A15.85,15.85,0,0,0,107.18,24.33ZM104,200H40l.06-.15L104,40Zm126.77-6.15-64-159.93-.06-.14A16,16,0,0,0,136,40V200a16,16,0,0,0,16,16h64a16,16,0,0,0,14.78-22.15ZM152,200V40l63.93,159.84.06.15Z"></path>
+      </svg>,
       Trash2: (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
         fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         className={`${props.className} pointer-events-none`}>
@@ -889,6 +895,23 @@
       });
     };
 
+    const flipImage = (base64Str) => {
+      return new Promise((resolve) => {
+        let img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+          let canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          let ctx = canvas.getContext('2d');
+          ctx.translate(img.width, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
+        };
+      });
+    };
+
     // --- NEW: Reusable Polaroid Component ---
     const PolaroidCard = ({ imageSrc, date, rotation = 'rotate-0', className = '', washiTapeColor = 'bg-yellow-400',
       isShaking = false, showStamp = false }) => {
@@ -1249,7 +1272,9 @@
             const originalBase64 = reader.result;
             // Compress image to max 2048px width, 0.95 quality (High Fidelity)
             const compressedBase64 = await resizeImage(originalBase64, 2048, 0.95);
-            setPhotoData(compressedBase64);
+            // Default: FLIP IT automatically (most users want mirror effect for selfies)
+            const flipped = await flipImage(compressedBase64);
+            setPhotoData(flipped);
             setPhase('PREVIEW');
           };
           reader.readAsDataURL(file);
@@ -1295,6 +1320,12 @@
         handleStartCamera();
       };
 
+      const handleFlip = async () => {
+        if (!photoData) return;
+        const flipped = await flipImage(photoData);
+        setPhotoData(flipped);
+      };
+
       return (
         <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300 ${phase
           !== 'CELEBRATION' ? 'bg-black/80 backdrop-blur-sm' : 'bg-[#5A3E2B]/80 backdrop-blur-md'}`}>
@@ -1334,14 +1365,19 @@
                 isShaking={phase === 'SAVING'} showStamp={phase === 'SUCCESS'} washiTapeColor={achievement.tapeColor} />
 
               {phase === 'PREVIEW' && (
-                <div className="flex items-center gap-4 w-full px-4">
+                <div className="flex items-center gap-2 w-full px-4">
                   <button onClick={handleRetake}
-                    className="flex-1 py-3 border-2 border-[#FFCB7D]/30 text-[#FFCB7D] rounded-full font-bold hover:bg-[#FFCB7D]/10 transition-colors">
+                    className="flex-1 py-3 border-2 border-[#FFCB7D]/30 text-[#FFCB7D] rounded-full font-bold hover:bg-[#FFCB7D]/10 transition-colors text-sm">
                     重拍
                   </button>
+                  <button onClick={handleFlip}
+                    className="p-3 border-2 border-[#FFCB7D]/30 text-[#FFCB7D] rounded-full font-bold hover:bg-[#FFCB7D]/10 transition-colors flex items-center justify-center"
+                    title="鏡像翻轉">
+                    <Icons.FlipHorizontal size={20} />
+                  </button>
                   <button onClick={handleSave}
-                    className="flex-[2] py-3 bg-[#FFCB7D] text-[#5A3E2B] rounded-full font-black shadow-[0_0_20px_rgba(255,203,125,0.4)] hover:bg-[#FFDCA9] hover:scale-105 transition-all flex items-center justify-center gap-2">
-                    <Icons.CheckCircle size={20} /> 儲存回憶
+                    className="flex-[2] py-3 bg-[#FFCB7D] text-[#5A3E2B] rounded-full font-bold shadow-[0_0_20px_rgba(255,203,125,0.4)] hover:bg-[#FFDCA9] hover:scale-105 transition-all flex items-center justify-center gap-2 text-sm">
+                    <Icons.CheckCircle size={20} /> 儲存
                   </button>
                 </div>
               )}
@@ -2652,14 +2688,27 @@
                             // Find linked photo (use String for type-safe comparison)
                             // Also support fallback for legacy photos with no sourceDrinkId
                             const linkedPhoto = memoryPhotos.find(p => {
-                              const isUserMatch = p.user === selectedAchievement.user;
+                              const isUserMatch = (p.user || '').trim() === (selectedAchievement.user || '').trim();
                               const isTitleMatch = p.title === selectedAchievement.title;
-                              const isIdMatch = String(p.sourceDrinkId) === String(item.timestamp);
+                              const isIdMatch = p.sourceDrinkId && item.timestamp && String(p.sourceDrinkId) === String(item.timestamp);
                               // Strict Legacy Date Match
                               const isLegacyMatch = !p.sourceDrinkId && isUserMatch && isTitleMatch && p.date === item.date;
 
                               return isIdMatch || isLegacyMatch;
-                            });
+                            }) || (() => {
+                              // Fallback: if no exact ID/legacy match, try user+title match
+                              // This handles cases where sourceDrinkId precision was lost in Google Sheets
+                              const candidates = memoryPhotos.filter(p => {
+                                const isUserMatch = (p.user || '').trim() === (selectedAchievement.user || '').trim();
+                                const isTitleMatch = p.title === selectedAchievement.title;
+                                return isUserMatch && isTitleMatch && p.photoUrl;
+                              });
+                              if (candidates.length === 0) return null;
+                              // For single-item achievements or when only one photo exists, return it
+                              if (candidates.length === 1 || selectedAchievement.items.length === 1) return candidates[candidates.length - 1];
+                              // For multi-item: try to match by index (reversed items → latest first)
+                              return candidates[candidates.length - 1 - i] || null;
+                            })();
                             const seed = item.timestamp % 100;
                             const rotation = (seed % 6) - 3;
 
