@@ -4,6 +4,8 @@
 
 ![Version](https://img.shields.io/badge/version-8.0-blue.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)
 
+https://kchang0823.github.io/iloveboba/iloveboba.html
+
 ## ✨ 精選特色
 
 *   **📸 回憶拍立得牆 (Memory Wall)**
